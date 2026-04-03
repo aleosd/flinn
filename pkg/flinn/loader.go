@@ -44,26 +44,25 @@ func NewLoader(opts ...LoaderOption) *Loader {
 
 func (l *Loader) walk(fields []Field, pathPrefix, envPrefix string, errs *FieldErrors) {
 	for _, f := range fields {
-		def := buildDef(f.opts)
 		logicalPath := joinPath(pathPrefix, f.name)
 
 		if f.kind == kindGroup {
 			// Groups don't hold a value themselves.
 			// They contribute a path segment and optionally an env prefix.
-			childEnvPrefix := joinEnvPrefix(envPrefix, def.envKey)
+			childEnvPrefix := joinEnvPrefix(envPrefix, f.envKey)
 			l.walk(f.children, logicalPath, childEnvPrefix, errs)
 			continue
 		}
 
 		// Leaf field: resolve, coerce, validate.
-		rawVal, found := l.resolve(def, envPrefix)
+		rawVal, found := l.resolve(f, envPrefix)
 
 		if !found {
-			if def.hasDefault {
-				f.set(def.defaultVal)
+			if f.hasDefault {
+				f.set(f.defaultVal)
 				continue
 			}
-			if def.required {
+			if f.required {
 				errs.add(logicalPath, "required", nil, "value is required but was not provided")
 			}
 			continue
@@ -75,12 +74,12 @@ func (l *Loader) walk(fields []Field, pathPrefix, envPrefix string, errs *FieldE
 		}
 
 		// Run validation rules against the now-typed value.
-		l.validate(logicalPath, f.dest, def, errs)
+		l.validate(logicalPath, f.dest, f, errs)
 	}
 }
 
-func (l *Loader) validate(path string, val any, def fieldDef, errs *FieldErrors) {
-	for _, v := range def.validators {
+func (l *Loader) validate(path string, val any, f Field, errs *FieldErrors) {
+	for _, v := range f.validators {
 		if err := v(val); err != nil {
 			errs.add(path, "validate", val, err.Error())
 		}
@@ -89,9 +88,9 @@ func (l *Loader) validate(path string, val any, def fieldDef, errs *FieldErrors)
 
 // resolve tries each source in order, returning the first hit.
 // The env key used is: envPrefix + "_" + def.envKey (if both are set).
-func (l *Loader) resolve(def fieldDef, envPrefix string) (string, bool) {
+func (l *Loader) resolve(f Field, envPrefix string) (string, bool) {
 	// Try env variable first
-	key := joinEnvPrefix(envPrefix, def.envKey)
+	key := joinEnvPrefix(envPrefix, f.envKey)
 
 	if envValue, ok := os.LookupEnv(key); ok {
 		return envValue, true

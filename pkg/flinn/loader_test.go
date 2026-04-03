@@ -72,4 +72,32 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		assert.Equal(t, port, cfg.Database.Port)
 		assert.Equal(t, rootURL, cfg.RootURL)
 	})
+
+	t.Run("without group prefix", func(t *testing.T) {
+		// arrange
+		port := 8080
+		host := "my.db.host"
+		rootURL := "https://example.com"
+		t.Setenv("FL_PORT", strconv.Itoa(port))
+		t.Setenv("FL_HOST", host)
+		t.Setenv("FL_ROOT_URL", rootURL)
+		var cfg TestConfig
+		fields := []Field{
+			Group("database", []Field{
+				String("host", &cfg.Database.Host, Env("HOST")),
+				Int("port", &cfg.Database.Port, Env("PORT")),
+			}),
+			String("root_url", &cfg.RootURL, Env("ROOT_URL")),
+		}
+		loader := NewLoader(WithEnvPrefix("FL"))
+
+		//act
+		err := loader.Load(fields)
+
+		//assert
+		require.NoError(t, err)
+		assert.Equal(t, host, cfg.Database.Host)
+		assert.Equal(t, port, cfg.Database.Port)
+		assert.Equal(t, rootURL, cfg.RootURL)
+	})
 }
