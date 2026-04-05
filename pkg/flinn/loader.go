@@ -1,9 +1,12 @@
 package flinn
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Source interface {
-	Get(key string) (string, error)
+	Get(path []string) (string, bool, error)
 }
 
 type Loader struct {
@@ -13,7 +16,7 @@ type Loader struct {
 
 func (l *Loader) Load(fields []Field) error {
 	var errs FieldErrors
-	l.walk(fields, "", l.envPrefix, &errs)
+	l.walk(fields, []string{}, l.envPrefix, &errs)
 	if len(errs) > 0 {
 		return errs
 	}
@@ -42,21 +45,26 @@ func NewLoader(opts ...LoaderOption) *Loader {
 	return l
 }
 
-func (l *Loader) walk(fields []Field, pathPrefix, envPrefix string, errs *FieldErrors) {
+func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, errs *FieldErrors) {
 	for _, f := range fields {
-		logicalPath := joinPath(pathPrefix, f.name)
-
 		if f.kind == kindGroup {
 			// Groups don't hold a value themselves.
 			// They contribute a path segment and optionally an env prefix.
 			childEnvPrefix := joinEnvPrefix(envPrefix, f.envKey)
-			l.walk(f.children, logicalPath, childEnvPrefix, errs)
+			childPathSegments := append(pathSegments, f.getPathSegment())
+			l.walk(f.children, childPathSegments, childEnvPrefix, errs)
 			continue
 		}
 
 		// Leaf field: resolve, coerce, validate.
-		rawVal, found := l.resolve(f, envPrefix)
-
+		envKey := joinEnvPrefix(envPrefix, f.envKey)
+		keyPath := append(pathSegments, f.getPathSegment())
+		logicalPath := strings.Join(keyPath, ".")
+		rawVal, found, err := l.resolve(keyPath, envKey)
+		if err != nil {
+			errs.add(logicalPath, "resolve", nil, err.Error())
+			continue
+		}
 		if !found {
 			if f.hasDefault {
 				f.set(f.defaultVal)
@@ -88,28 +96,23 @@ func (l *Loader) validate(path string, val any, f Field, errs *FieldErrors) {
 
 // resolve tries each source in order, returning the first hit.
 // The env key used is: envPrefix + "_" + def.envKey (if both are set).
-func (l *Loader) resolve(f Field, envPrefix string) (string, bool) {
+func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, error) {
 	// Try env variable first
-	key := joinEnvPrefix(envPrefix, f.envKey)
-
-	if envValue, ok := os.LookupEnv(key); ok {
-		return envValue, true
+	if envValue, ok := os.LookupEnv(envKey); ok {
+		return envValue, true, nil
 	}
 
 	if l.source == nil {
-		return "", false
+		return "", false, nil
 	}
-	if v, err := (*l.source).Get(key); err == nil {
-		return v, true
+	v, found, err := (*l.source).Get(pathSegments)
+	if err != nil {
+		return "", false, err
 	}
-	return "", false
-}
-
-func joinPath(prefix, name string) string {
-	if prefix == "" {
-		return name
+	if found == false {
+		return "", false, nil
 	}
-	return prefix + "." + name
+	return v, true, nil
 }
 
 func joinEnvPrefix(prefix, key string) string {

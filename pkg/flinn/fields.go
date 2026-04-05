@@ -62,6 +62,13 @@ func (f *Field) set(value any) {
 	f.dest = value
 }
 
+func (f *Field) getPathSegment() string {
+	if f.fileKey != "" {
+		return f.fileKey
+	}
+	return toSnakeCase(f.name)
+}
+
 // makeField is the shared constructor logic for any leaf type.
 func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption) Field {
 	f := Field{
@@ -78,6 +85,9 @@ func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption)
 	}
 	for _, o := range opts {
 		o(&f)
+	}
+	if f.fileKey == "" {
+		f.fileKey = toSnakeCase(name)
 	}
 	return f
 }
@@ -153,4 +163,27 @@ func toSnakeCase(s string) string {
 	}
 
 	return n.String()
+}
+
+func stringify(v any) (string, bool) {
+	switch val := v.(type) {
+	case string:
+		return val, true
+
+	case int:
+		return strconv.Itoa(val), true
+
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64), true
+
+	case bool:
+		return strconv.FormatBool(val), true
+
+	case nil:
+		return "", false // null treat as absent
+
+	default:
+		// []any or map[string]any — not a leaf value
+		return "", false
+	}
 }
