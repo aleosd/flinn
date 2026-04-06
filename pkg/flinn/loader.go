@@ -1,3 +1,6 @@
+// Package flinn populates sutruct values from environment variables and different source formats.
+//
+// It is designed to load and validate configuration.
 package flinn
 
 import (
@@ -5,15 +8,22 @@ import (
 	"strings"
 )
 
+// A Source is an interface that must be impelmented by any other struct
+// in order to be used as a source for configuration values.
 type Source interface {
 	Get(path []string) (string, bool, error)
 }
 
+// Loader is responsible for base configutation and configuation loading.
 type Loader struct {
 	source    *Source
 	envPrefix string
 }
 
+// Load populates configuration struct, based on fields configuration provided
+// as an input array of Field objects. Each field is loaded sequentially,
+// environment variables are take prcedence over other sources.
+// Error of tyoe FieldErrors is returned in case of any errors.
 func (l *Loader) Load(fields []Field) error {
 	var errs FieldErrors
 	l.walk(fields, []string{}, l.envPrefix, &errs)
@@ -23,21 +33,25 @@ func (l *Loader) Load(fields []Field) error {
 	return nil
 }
 
-type LoaderOption func(*Loader)
+type loaderOption func(*Loader)
 
-func WithSource(source Source) LoaderOption {
+// WithSource is a loader oprtion that sets the source to use for loading configuration.
+// It accepts only objects with Source interface.
+func WithSource(source Source) loaderOption {
 	return func(l *Loader) {
 		l.source = &source
 	}
 }
 
-func WithEnvPrefix(envPrefix string) LoaderOption {
+// WithEnvPrefix is a loader option that sets the prefix to use for environment variables.
+func WithEnvPrefix(envPrefix string) loaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
 	}
 }
 
-func NewLoader(opts ...LoaderOption) *Loader {
+// NewLoader returns a new Loader instance.
+func NewLoader(opts ...loaderOption) *Loader {
 	l := &Loader{}
 	for _, opt := range opts {
 		opt(l)
