@@ -47,15 +47,16 @@ type Field struct {
 	dest     any
 	children []Field
 
-	envKey     string
-	envPrefix  string
-	fileKey    string
-	required   bool
-	hasDefault bool
-	defaultVal any
-	min, max   *float64
-	oneOf      []string
-	validators []func(any) error
+	envKey       string
+	envPrefix    string
+	fileKey      string
+	required     bool
+	hasDefault   bool
+	defaultVal   any
+	applyDefault func()
+	min, max     *float64
+	oneOf        []string
+	validators   []func(any) error
 }
 
 func (f *Field) set(value any) {
@@ -85,6 +86,11 @@ func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption)
 	}
 	for _, o := range opts {
 		o(&f)
+	}
+	if f.hasDefault {
+		if typed, ok := f.defaultVal.(T); ok {
+			f.applyDefault = func() { *dest = typed }
+		}
 	}
 	if f.fileKey == "" {
 		f.fileKey = toSnakeCase(name)

@@ -1,6 +1,19 @@
-// Package flinn populates sutruct values from environment variables and different source formats.
+// Package flinn provides a declarative configuration loader for Go structs.
+// It supports loading values from environment variables, file-based sources (like YAML/JSON),
+// and validating them with rules.
 //
-// It is designed to load and validate configuration.
+// # Core Concepts
+//
+//   - Loader: Orchestrates loading from multiple sources.
+//   - Field: A declaration for a single configuration value, created by String(), Int(), etc.
+//   - Source: An interface for providing values from a structured source (e.g., a YAML file).
+//
+// Values are resolved in the following order of precedence:
+//  1. Environment variable (if an Env option is set)
+//  2. Source (e.g., configuration file)
+//  3. Default value (if set)
+//
+// If a required field has no value, loading fails with a FieldErrors collection.
 package flinn
 
 import (
@@ -16,7 +29,7 @@ type Source interface {
 
 // Loader is responsible for base configutation and configuation loading.
 type Loader struct {
-	source    *Source
+	source    Source
 	envPrefix string
 }
 
@@ -39,7 +52,7 @@ type loaderOption func(*Loader)
 // It accepts only objects with Source interface.
 func WithSource(source Source) loaderOption {
 	return func(l *Loader) {
-		l.source = &source
+		l.source = source
 	}
 }
 
@@ -81,7 +94,11 @@ func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, e
 		}
 		if !found {
 			if f.hasDefault {
-				f.set(f.defaultVal)
+				if f.applyDefault != nil {
+					f.applyDefault()
+				} else {
+					errs.add(logicalPath, "default", nil, "bad default value (type mistmatch?)")
+				}
 				continue
 			}
 			if f.required {
@@ -112,14 +129,16 @@ func (l *Loader) validate(path string, val any, f Field, errs *FieldErrors) {
 // The env key used is: envPrefix + "_" + def.envKey (if both are set).
 func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, error) {
 	// Try env variable first
-	if envValue, ok := os.LookupEnv(envKey); ok {
-		return envValue, true, nil
+	if envKey != "" {
+		if envValue, ok := os.LookupEnv(envKey); ok {
+			return envValue, true, nil
+		}
 	}
 
 	if l.source == nil {
 		return "", false, nil
 	}
-	v, found, err := (*l.source).Get(pathSegments)
+	v, found, err := l.source.Get(pathSegments)
 	if err != nil {
 		return "", false, err
 	}
