@@ -59,10 +59,6 @@ type Field struct {
 	validators   []func(any) error
 }
 
-func (f *Field) set(value any) {
-	f.dest = value
-}
-
 func (f *Field) getPathSegment() string {
 	if f.fileKey != "" {
 		return f.fileKey

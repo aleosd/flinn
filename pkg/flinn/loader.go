@@ -17,9 +17,31 @@
 package flinn
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"strings"
 )
+
+var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+// envKeyFunc derives the effective environment variable key for a field.
+// prefix is the accumulated env prefix at the current walk depth.
+type envKeyFunc func(f Field, prefix string) string
+
+// explicitEnvKey is the default: only use a key if Env() was explicitly set.
+func explicitEnvKey(f Field, prefix string) string {
+	return joinEnvPrefix(prefix, f.envKey)
+}
+
+// autoEnvKey falls back to the uppercased snake_case field name.
+func autoEnvKey(f Field, prefix string) string {
+	key := f.envKey
+	if key == "" {
+		key = strings.ToUpper(f.getPathSegment())
+	}
+	return joinEnvPrefix(prefix, key)
+}
 
 // A Source is an interface that must be impelmented by any other struct
 // in order to be used as a source for configuration values.
@@ -29,8 +51,10 @@ type Source interface {
 
 // Loader is responsible for base configutation and configuation loading.
 type Loader struct {
-	source    Source
-	envPrefix string
+	source     Source
+	envPrefix  string
+	log        *slog.Logger
+	envKeyFunc envKeyFunc
 }
 
 // Load populates configuration struct, based on fields configuration provided
@@ -63,9 +87,25 @@ func WithEnvPrefix(envPrefix string) loaderOption {
 	}
 }
 
+// WithLogger is a loader option that sets the logger to use for logging.
+func WithLogger(logger *slog.Logger) loaderOption {
+	return func(l *Loader) {
+		l.log = logger
+	}
+}
+
+func WithAutoEnv() loaderOption {
+	return func(l *Loader) {
+		l.envKeyFunc = autoEnvKey
+	}
+}
+
 // NewLoader returns a new Loader instance.
 func NewLoader(opts ...loaderOption) *Loader {
-	l := &Loader{}
+	l := &Loader{
+		log:        discardLogger,
+		envKeyFunc: explicitEnvKey,
+	}
 	for _, opt := range opts {
 		opt(l)
 	}
@@ -84,7 +124,7 @@ func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, e
 		}
 
 		// Leaf field: resolve, coerce, validate.
-		envKey := joinEnvPrefix(envPrefix, f.envKey)
+		envKey := l.envKeyFunc(f, envPrefix)
 		keyPath := append(pathSegments, f.getPathSegment())
 		logicalPath := strings.Join(keyPath, ".")
 		rawVal, found, err := l.resolve(keyPath, envKey)
@@ -95,14 +135,17 @@ func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, e
 		if !found {
 			if f.hasDefault {
 				if f.applyDefault != nil {
+					l.log.Debug("applying default value", f.name, f.defaultVal)
 					f.applyDefault()
 				} else {
+					l.log.Warn("default value is set, but can not be applied", logicalPath, f.defaultVal)
 					errs.add(logicalPath, "default", nil, "bad default value (type mistmatch?)")
 				}
 				continue
 			}
 			if f.required {
 				errs.add(logicalPath, "required", nil, "value is required but was not provided")
+				l.log.Warn("required value is missing", logicalPath, "")
 			}
 			continue
 		}
@@ -121,6 +164,7 @@ func (l *Loader) validate(path string, val any, f Field, errs *FieldErrors) {
 	for _, v := range f.validators {
 		if err := v(val); err != nil {
 			errs.add(path, "validate", val, err.Error())
+			l.log.Warn("validation failed", path, err.Error())
 		}
 	}
 }
@@ -131,11 +175,13 @@ func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, er
 	// Try env variable first
 	if envKey != "" {
 		if envValue, ok := os.LookupEnv(envKey); ok {
+			l.log.Debug("resolved value from env", envKey, pathSegments)
 			return envValue, true, nil
 		}
 	}
 
 	if l.source == nil {
+		l.log.Warn("no source configured")
 		return "", false, nil
 	}
 	v, found, err := l.source.Get(pathSegments)
@@ -145,6 +191,7 @@ func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, er
 	if found == false {
 		return "", false, nil
 	}
+	l.log.Debug("resolved value from source", "", pathSegments)
 	return v, true, nil
 }
 

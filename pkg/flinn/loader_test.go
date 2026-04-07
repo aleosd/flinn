@@ -127,6 +127,34 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		assert.Equal(t, port, cfg.Database.Port)
 		assert.Equal(t, rootURL, cfg.RootURL)
 	})
+
+	t.Run("with auto env", func(t *testing.T) {
+		// arrange
+		port := 8080
+		host := "my.db.host"
+		rootURL := "https://example.com"
+		t.Setenv("PORT", strconv.Itoa(port))
+		t.Setenv("HOST", host)
+		t.Setenv("ROOT_URL", rootURL)
+		var cfg TestConfig
+		fields := []Field{
+			Group("database", []Field{
+				String("host", &cfg.Database.Host),
+				Int("port", &cfg.Database.Port),
+			}),
+			String("root_url", &cfg.RootURL),
+		}
+		loader := NewLoader(WithAutoEnv())
+
+		//act
+		err := loader.Load(fields)
+
+		//assert
+		require.NoError(t, err)
+		assert.Equal(t, host, cfg.Database.Host)
+		assert.Equal(t, port, cfg.Database.Port)
+		assert.Equal(t, rootURL, cfg.RootURL)
+	})
 }
 
 func TestLoader_LoadsFromSource(t *testing.T) {
@@ -207,5 +235,64 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 		assert.Equal(t, "my.db.host", cfg.Database.Host)
 		assert.Equal(t, 8080, cfg.Database.Port)
 		assert.Equal(t, "https://example.com", cfg.RootURL)
+	})
+}
+
+func TestLoader_DefaultOption(t *testing.T) {
+	t.Run("loads default value", func(t *testing.T) {
+		// arrange
+		var cfg TestConfig
+		url := "http://example.com"
+		fields := []Field{
+			String("host", &cfg.RootURL, Default(url)),
+		}
+		loader := NewLoader()
+
+		// act
+		err := loader.Load(fields)
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, url, cfg.RootURL)
+	})
+
+	t.Run("env var has precedence over default value", func(t *testing.T) {
+		// arrange
+		var cfg TestConfig
+		url := "http://example.com"
+		envURL := "https://my-domain.com"
+		fields := []Field{
+			String("root_url", &cfg.RootURL, Default(url), Env("ROOT_URL")),
+		}
+		loader := NewLoader()
+		t.Setenv("ROOT_URL", envURL)
+
+		// act
+		err := loader.Load(fields)
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, envURL, cfg.RootURL)
+	})
+
+	t.Run("source var has precedence over default value", func(t *testing.T) {
+		// arrange
+		var cfg TestConfig
+		url := "http://example.com"
+		sourceURL := "https://my-domain.com"
+		var sourceData = map[string]any{
+			"root_url": sourceURL,
+		}
+		fields := []Field{
+			String("root_url", &cfg.RootURL, Default(url)),
+		}
+		loader := NewLoader(WithSource(inMemorySource{data: sourceData}))
+
+		// act
+		err := loader.Load(fields)
+
+		// assert
+		require.NoError(t, err)
+		assert.Equal(t, sourceURL, cfg.RootURL)
 	})
 }
