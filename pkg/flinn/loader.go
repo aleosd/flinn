@@ -135,17 +135,17 @@ func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, e
 		if !found {
 			if f.hasDefault {
 				if f.applyDefault != nil {
-					l.log.Debug("applying default value", f.name, f.defaultVal)
+					l.log.Debug("applying default value", "field", f.name, "value", f.defaultVal)
 					f.applyDefault()
 				} else {
-					l.log.Warn("default value is set, but can not be applied", logicalPath, f.defaultVal)
+					l.log.Warn("default value is set, but can not be applied", "path", logicalPath, "value", f.defaultVal)
 					errs.add(logicalPath, "default", nil, "bad default value (type mistmatch?)")
 				}
 				continue
 			}
 			if f.required {
 				errs.add(logicalPath, "required", nil, "value is required but was not provided")
-				l.log.Warn("required value is missing", logicalPath, "")
+				l.log.Warn("required value is missing", "path", logicalPath)
 			}
 			continue
 		}
