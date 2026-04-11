@@ -12,7 +12,25 @@ import (
 func TestNewJSONSource(t *testing.T) {
 	t.Run("FailsIfFileDoesNotExist", func(t *testing.T) {
 		_, err := NewJSONSource("does_not_exist.json")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "reading json source")
+
+	})
+
+	t.Run("FailsIfFileIsNotJSON", func(t *testing.T) {
+		_, err := NewJSONSource("testdata/invalid.json")
+		require.Error(t, err)
+	})
+
+	t.Run("FailsIfNotJSONObject", func(t *testing.T) {
+		_, err := NewJSONSource("testdata/array.json")
 		assert.Error(t, err)
+	})
+
+	t.Run("LoadsValidJSON", func(t *testing.T) {
+		s, err := NewJSONSource("testdata/config.json")
+		require.NoError(t, err)
+		assert.NotNil(t, s)
 	})
 }
 

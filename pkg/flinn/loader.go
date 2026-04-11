@@ -5,11 +5,12 @@
 // # Core Concepts
 //
 //   - Loader: Orchestrates loading from multiple sources.
-//   - Field: A declaration for a single configuration value, created by String(), Int(), etc.
+//   - Field: Definition for a single configuration value, created by `String()`, `Int()`, etc.
 //   - Source: An interface for providing values from a structured source (e.g., a YAML file).
 //
 // Values are resolved in the following order of precedence:
-//  1. Environment variable (if an Env option is set)
+//
+//  1. Environment variable (if an enabled for field or loader)
 //  2. Source (e.g., configuration file)
 //  3. Default value (if set)
 //
@@ -94,6 +95,8 @@ func WithLogger(logger *slog.Logger) loaderOption {
 	}
 }
 
+// WithAutoEnv is a loader option that enables automatic load of configuration from environment.
+// Variable names can be set per field using `Env()` or will be derived from the field name.
 func WithAutoEnv() loaderOption {
 	return func(l *Loader) {
 		l.envKeyFunc = autoEnvKey
