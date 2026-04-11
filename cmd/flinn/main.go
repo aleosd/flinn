@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aleosd/flinn"
 )
@@ -20,8 +21,13 @@ type Config struct {
 }
 
 func main() {
-	fmt.Println("Flinning!!!")
-	loader := flinn.NewLoader()
+	fmt.Println("Loading configuration...")
+	source, err := flinn.NewJSONSource("cmd/flinn/testdata/config.json")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	loader := flinn.NewLoader(flinn.WithSource(source))
 
 	var cfg Config
 
@@ -38,4 +44,7 @@ func main() {
 		}),
 	}
 	loader.Load(fields)
+
+	fmt.Println(cfg)
+	fmt.Println("Done!")
 }
