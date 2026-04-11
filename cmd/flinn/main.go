@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -22,7 +23,10 @@ type Config struct {
 
 func main() {
 	fmt.Println("Loading configuration...")
-	source, err := flinn.NewJSONSource("cmd/flinn/testdata/config.json")
+
+	filPath := flag.String("config", "", "Path to configuration file")
+	flag.Parse()
+	source, err := flinn.NewJSONSource(*filPath)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)

@@ -19,12 +19,16 @@ type jsonSource struct {
 func NewJSONSource(path string) (Source, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("flinn: reading json source %q: %w", path, err)
+		return nil, fmt.Errorf("flinn: reading json source: %w", err)
 	}
 
 	var data map[string]any
 	if err := json.Unmarshal(b, &data); err != nil {
-		return nil, fmt.Errorf("flinn: parsing json source %q: %w", path, err)
+		return nil, fmt.Errorf("flinn: parsing json source: %w", err)
+	}
+
+	if data == nil {
+		return nil, fmt.Errorf("flinn: json source: root must be a JSON object")
 	}
 
 	return &jsonSource{data: data}, nil
