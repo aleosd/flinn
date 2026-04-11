@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
 
 	"github.com/aleosd/flinn"
 )
@@ -20,8 +22,16 @@ type Config struct {
 }
 
 func main() {
-	fmt.Println("Flinning!!!")
-	loader := flinn.NewLoader()
+	fmt.Println("Loading configuration...")
+
+	filPath := flag.String("config", "", "Path to configuration file")
+	flag.Parse()
+	source, err := flinn.NewJSONSource(*filPath)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+	loader := flinn.NewLoader(flinn.WithSource(source))
 
 	var cfg Config
 
@@ -38,4 +48,7 @@ func main() {
 		}),
 	}
 	loader.Load(fields)
+
+	fmt.Println(cfg)
+	fmt.Println("Done!")
 }

@@ -1,0 +1,10 @@
+{
+    "database": {
+        "host": "my.db.host",
+        "port": 8080
+    },
+    "api": {
+        "host": "my.api.host",
+        "port": 8080
+    }
+}
