@@ -191,7 +191,7 @@ func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, er
 	if err != nil {
 		return "", false, err
 	}
-	if found == false {
+	if !found {
 		return "", false, nil
 	}
 	l.log.Debug("resolved value from source", "", pathSegments)

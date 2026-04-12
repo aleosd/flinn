@@ -187,7 +187,6 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 		assert.Equal(t, "my.db.host", cfg.Database.Host)
 		assert.Equal(t, 8080, cfg.Database.Port)
 		assert.Equal(t, "https://example.com", cfg.RootURL)
-
 	})
 
 	t.Run("loads data from source with to snakecase conversion", func(t *testing.T) {
@@ -211,7 +210,6 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 		assert.Equal(t, "my.db.host", cfg.Database.Host)
 		assert.Equal(t, 8080, cfg.Database.Port)
 		assert.Equal(t, "https://example.com", cfg.RootURL)
-
 	})
 
 	t.Run("loads data based on file key option", func(t *testing.T) {
