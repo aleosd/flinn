@@ -48,7 +48,7 @@ func (s *jsonSource) Get(path []string) (string, bool, error) {
 			// A non-final segment resolved to a scalar — path is too deep.
 			return "", false, fmt.Errorf(
 				"flinn: json path %q: segment %q is not an object",
-				joinPath(path), segment,
+				strings.Join(path, "."), segment,
 			)
 		}
 
@@ -63,7 +63,7 @@ func (s *jsonSource) Get(path []string) (string, bool, error) {
 			if !ok {
 				return "", false, fmt.Errorf(
 					"flinn: json path %q: value is not a scalar (got %T)",
-					joinPath(path), val,
+					strings.Join(path, "."), val,
 				)
 			}
 			return str, true, nil
@@ -73,15 +73,4 @@ func (s *jsonSource) Get(path []string) (string, bool, error) {
 	}
 
 	return "", false, nil
-}
-
-func joinPath(segments []string) string {
-	var result strings.Builder
-	for i, s := range segments {
-		if i > 0 {
-			result.WriteString(".")
-		}
-		result.WriteString(s)
-	}
-	return result.String()
 }

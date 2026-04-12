@@ -14,7 +14,6 @@ func TestNewJSONSource(t *testing.T) {
 		_, err := NewJSONSource("does_not_exist.json")
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "reading json source")
-
 	})
 
 	t.Run("FailsIfFileIsNotJSON", func(t *testing.T) {
@@ -58,7 +57,6 @@ func TestJSONSource(t *testing.T) {
 				assert.Equal(t, tt.expected, got)
 			})
 		}
-
 	})
 
 	t.Run("TestGetReturnsFalseIfNoKey", func(t *testing.T) {

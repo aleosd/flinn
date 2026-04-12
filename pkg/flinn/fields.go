@@ -15,24 +15,30 @@ const (
 type fieldOption func(*Field)
 type parser[T any] func(raw string) (T, error)
 
+// Env is a Field option to set an environment variable name to load a value from.
 func Env(key string) fieldOption {
 	return func(f *Field) {
 		f.envKey = key
 	}
 }
 
+// FileKey is a name of configuration option in a file to load value from.
 func FileKey(key string) fieldOption {
 	return func(f *Field) {
 		f.fileKey = key
 	}
 }
 
+// Required is a Field option that marks this field as required.
+// Loader will fail - return an error during loading - if this field is not set.
 func Required() fieldOption {
 	return func(f *Field) {
 		f.required = true
 	}
 }
 
+// Default is a Field option to set a default value for a field.
+// This value will be used if other sources (env, file) do not provide a value.
 func Default(val any) fieldOption {
 	return func(f *Field) {
 		f.hasDefault = true
@@ -40,6 +46,7 @@ func Default(val any) fieldOption {
 	}
 }
 
+// Field is a struct to configure a single configuration key.
 type Field struct {
 	kind     fieldKind
 	name     string
@@ -54,7 +61,6 @@ type Field struct {
 	hasDefault   bool
 	defaultVal   any
 	applyDefault func()
-	min, max     *float64
 	oneOf        []string
 	validators   []func(any) error
 }
@@ -94,6 +100,7 @@ func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption)
 	return f
 }
 
+// String is a constructor for a configuration field with value of type string.
 func String(name string, dest *string, opts ...fieldOption) Field {
 	assigner := func(raw string) (string, error) {
 		return raw, nil
@@ -101,6 +108,7 @@ func String(name string, dest *string, opts ...fieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
+// Int is a constructor for a configuration field with value of type int.
 func Int(name string, dest *int, opts ...fieldOption) Field {
 	assigner := func(raw string) (int, error) {
 		i, err := strconv.Atoi(raw)
@@ -112,7 +120,8 @@ func Int(name string, dest *int, opts ...fieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// Group wraps a set of children under a named scope.
+// Group wraps a set of children fields under a named scope.
+// Used to represent a nested configuration structures - maps.
 // Options on a group apply to the group itself (prefix, file key).
 func Group(name string, children []Field, opts ...fieldOption) Field {
 	var f = Field{kind: kindGroup, name: name, children: children}

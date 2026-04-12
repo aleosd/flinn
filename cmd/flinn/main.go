@@ -47,7 +47,10 @@ func main() {
 			flinn.Int("port", &cfg.API.Port),
 		}),
 	}
-	loader.Load(fields)
+	if err := loader.Load(fields); err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
 
 	fmt.Println(cfg)
 	fmt.Println("Done!")
