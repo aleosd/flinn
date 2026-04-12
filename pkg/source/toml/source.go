@@ -62,6 +62,10 @@ func (s *tomlSource) Get(path []string) (string, bool, error) {
 		}
 
 		if i == len(path)-1 {
+			// Nil (TOML null) is treated as absent, not as a non-scalar error.
+			if val == nil {
+				return "", false, nil
+			}
 			// Leaf: coerce to string via the package-level stringify helper.
 			str, ok := stringify(val)
 			if !ok {
@@ -81,7 +85,7 @@ func (s *tomlSource) Get(path []string) (string, bool, error) {
 
 // stringify converts a TOML leaf value to its string representation.
 // TOML integers unmarshal as int64 (unlike JSON's float64).
-// TOML offset datetimes unmarshal as time.Time, formatted as RFC3339.
+// TOML offset datetimes unmarshal as time.Time, formatted as RFC3339Nano to preserve sub-second precision.
 // TOML local dates, times, and datetimes unmarshal as go-toml's Local* types,
 // formatted via their String() methods (ISO 8601 subsets).
 // Returns (_, false) for nil (treated as absent) and non-scalar types
@@ -101,7 +105,7 @@ func stringify(v any) (string, bool) {
 		return strconv.FormatBool(val), true
 
 	case time.Time:
-		return val.Format(time.RFC3339), true
+		return val.Format(time.RFC3339Nano), true
 
 	case gotoml.LocalDateTime:
 		return val.String(), true

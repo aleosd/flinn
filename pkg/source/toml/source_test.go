@@ -87,11 +87,18 @@ func TestTOMLSource_DatetimeTypes(t *testing.T) {
 	source, err := NewTOMLSource("testdata/datetime.toml")
 	require.NoError(t, err)
 
-	t.Run("OffsetDatetime_FormattedAsRFC3339", func(t *testing.T) {
+	t.Run("OffsetDatetime_WholeSeconds", func(t *testing.T) {
 		got, ok, err := source.Get([]string{"offset_dt"})
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, "2024-01-15T10:30:00Z", got)
+	})
+
+	t.Run("OffsetDatetime_SubSecondPrecisionPreserved", func(t *testing.T) {
+		got, ok, err := source.Get([]string{"offset_dt_subsecond"})
+		require.NoError(t, err)
+		assert.True(t, ok)
+		assert.Equal(t, "2024-01-15T10:30:00.123456789Z", got)
 	})
 
 	t.Run("LocalDatetime", func(t *testing.T) {

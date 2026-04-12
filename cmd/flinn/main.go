@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 	source, err := flinn.NewJSONSource(*filPath)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing source: %v\n", err)
 		os.Exit(1)
 	}
 	loader := flinn.NewLoader(flinn.WithSource(source))
@@ -48,7 +48,7 @@ func main() {
 		}),
 	}
 	if err := loader.Load(fields); err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
