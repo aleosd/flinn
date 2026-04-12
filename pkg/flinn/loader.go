@@ -44,13 +44,16 @@ func autoEnvKey(f Field, prefix string) string {
 	return joinEnvPrefix(prefix, key)
 }
 
-// A Source is an interface that must be impelmented by any other struct
+// A Source is an interface that must be implemented by any other struct
 // in order to be used as a source for configuration values.
 type Source interface {
+	// Get retrieves a configuration value from the source at the specified path.
+	// It returns the raw string value, a boolean indicating if the value was found,
+	// and an error if the retrieval failed.
 	Get(path []string) (string, bool, error)
 }
 
-// Loader is responsible for base configutation and configuation loading.
+// Loader is responsible for base configuration and configuration loading.
 type Loader struct {
 	source     Source
 	envPrefix  string
@@ -60,8 +63,8 @@ type Loader struct {
 
 // Load populates configuration struct, based on fields configuration provided
 // as an input array of Field objects. Each field is loaded sequentially,
-// environment variables are take prcedence over other sources.
-// Error of tyoe FieldErrors is returned in case of any errors.
+// environment variables take precedence over other sources.
+// Error of type FieldErrors is returned in case of any errors.
 func (l *Loader) Load(fields []Field) error {
 	var errs FieldErrors
 	l.walk(fields, []string{}, l.envPrefix, &errs)
@@ -71,25 +74,26 @@ func (l *Loader) Load(fields []Field) error {
 	return nil
 }
 
-type loaderOption func(*Loader)
+// LoaderOption is a function type used to configure a Loader.
+type LoaderOption func(*Loader)
 
-// WithSource is a loader oprtion that sets the source to use for loading configuration.
+// WithSource is a loader option that sets the source to use for loading configuration.
 // It accepts only objects with Source interface.
-func WithSource(source Source) loaderOption {
+func WithSource(source Source) LoaderOption {
 	return func(l *Loader) {
 		l.source = source
 	}
 }
 
 // WithEnvPrefix is a loader option that sets the prefix to use for environment variables.
-func WithEnvPrefix(envPrefix string) loaderOption {
+func WithEnvPrefix(envPrefix string) LoaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
 	}
 }
 
 // WithLogger is a loader option that sets the logger to use for logging.
-func WithLogger(logger *slog.Logger) loaderOption {
+func WithLogger(logger *slog.Logger) LoaderOption {
 	return func(l *Loader) {
 		l.log = logger
 	}
@@ -97,14 +101,14 @@ func WithLogger(logger *slog.Logger) loaderOption {
 
 // WithAutoEnv is a loader option that enables automatic load of configuration from environment.
 // Variable names can be set per field using `Env()` or will be derived from the field name.
-func WithAutoEnv() loaderOption {
+func WithAutoEnv() LoaderOption {
 	return func(l *Loader) {
 		l.envKeyFunc = autoEnvKey
 	}
 }
 
 // NewLoader returns a new Loader instance.
-func NewLoader(opts ...loaderOption) *Loader {
+func NewLoader(opts ...LoaderOption) *Loader {
 	l := &Loader{
 		log:        discardLogger,
 		envKeyFunc: explicitEnvKey,
