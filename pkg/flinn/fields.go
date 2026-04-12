@@ -12,18 +12,20 @@ const (
 	kindGroup
 )
 
-type fieldOption func(*Field)
+// FieldOption is a function type used to configure a Field.
+type FieldOption func(*Field)
+
 type parser[T any] func(raw string) (T, error)
 
 // Env is a Field option to set an environment variable name to load a value from.
-func Env(key string) fieldOption {
+func Env(key string) FieldOption {
 	return func(f *Field) {
 		f.envKey = key
 	}
 }
 
 // FileKey is a name of configuration option in a file to load value from.
-func FileKey(key string) fieldOption {
+func FileKey(key string) FieldOption {
 	return func(f *Field) {
 		f.fileKey = key
 	}
@@ -31,7 +33,7 @@ func FileKey(key string) fieldOption {
 
 // Required is a Field option that marks this field as required.
 // Loader will fail - return an error during loading - if this field is not set.
-func Required() fieldOption {
+func Required() FieldOption {
 	return func(f *Field) {
 		f.required = true
 	}
@@ -39,7 +41,7 @@ func Required() fieldOption {
 
 // Default is a Field option to set a default value for a field.
 // This value will be used if other sources (env, file) do not provide a value.
-func Default(val any) fieldOption {
+func Default(val any) FieldOption {
 	return func(f *Field) {
 		f.hasDefault = true
 		f.defaultVal = val
@@ -73,7 +75,7 @@ func (f *Field) getPathSegment() string {
 }
 
 // makeField is the shared constructor logic for any leaf type.
-func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption) Field {
+func makeField[T any](name string, dest *T, parse parser[T], opts []FieldOption) Field {
 	f := Field{
 		kind: kindLeaf,
 		name: name,
@@ -101,7 +103,7 @@ func makeField[T any](name string, dest *T, parse parser[T], opts []fieldOption)
 }
 
 // String is a constructor for a configuration field with value of type string.
-func String(name string, dest *string, opts ...fieldOption) Field {
+func String(name string, dest *string, opts ...FieldOption) Field {
 	assigner := func(raw string) (string, error) {
 		return raw, nil
 	}
@@ -109,7 +111,7 @@ func String(name string, dest *string, opts ...fieldOption) Field {
 }
 
 // Int is a constructor for a configuration field with value of type int.
-func Int(name string, dest *int, opts ...fieldOption) Field {
+func Int(name string, dest *int, opts ...FieldOption) Field {
 	assigner := func(raw string) (int, error) {
 		i, err := strconv.Atoi(raw)
 		if err != nil {
@@ -123,7 +125,7 @@ func Int(name string, dest *int, opts ...fieldOption) Field {
 // Group wraps a set of children fields under a named scope.
 // Used to represent a nested configuration structures - maps.
 // Options on a group apply to the group itself (prefix, file key).
-func Group(name string, children []Field, opts ...fieldOption) Field {
+func Group(name string, children []Field, opts ...FieldOption) Field {
 	var f = Field{kind: kindGroup, name: name, children: children}
 	for _, o := range opts {
 		o(&f)

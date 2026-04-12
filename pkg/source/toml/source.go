@@ -1,3 +1,4 @@
+// Package toml provides a TOML configuration source for the flinn loader.
 package toml
 
 import (
@@ -10,17 +11,17 @@ import (
 	gotoml "github.com/pelletier/go-toml/v2"
 )
 
-// tomlSource loads configuration values from a TOML file.
+// Source loads configuration values from a TOML file.
 // Nested tables are traversed using the path segments passed to Get,
 // matching the same dot-separated logical paths that the Loader constructs.
-type tomlSource struct {
+// Source satisfies the flinn.Source interface.
+type Source struct {
 	data map[string]any
 }
 
-// NewTOMLSource reads and parses the TOML file at the given path.
+// NewSource reads and parses the TOML file at the given path.
 // Returns an error if the file cannot be read or is not valid TOML.
-// The returned *tomlSource satisfies the flinn.Source interface.
-func NewTOMLSource(path string) (*tomlSource, error) {
+func NewSource(path string) (*Source, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("flinn: reading toml source: %w", err)
@@ -35,7 +36,7 @@ func NewTOMLSource(path string) (*tomlSource, error) {
 		return nil, fmt.Errorf("flinn: toml source: root must be a TOML table")
 	}
 
-	return &tomlSource{data: data}, nil
+	return &Source{data: data}, nil
 }
 
 // Get traverses the parsed TOML using path as a sequence of keys.
@@ -43,7 +44,7 @@ func NewTOMLSource(path string) (*tomlSource, error) {
 // if any segment along the path is absent.
 // Returns an error if an intermediate segment exists but is not a table,
 // or if the final value is not a scalar (e.g. it is a nested table or array).
-func (s *tomlSource) Get(path []string) (string, bool, error) {
+func (s *Source) Get(path []string) (string, bool, error) {
 	var current any = s.data
 
 	for i, segment := range path {

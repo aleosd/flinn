@@ -9,27 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewTOMLSource(t *testing.T) {
+func TestNewSource(t *testing.T) {
 	t.Run("FailsIfFileDoesNotExist", func(t *testing.T) {
-		_, err := NewTOMLSource("does_not_exist.toml")
+		_, err := NewSource("does_not_exist.toml")
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "reading toml source")
 	})
 
 	t.Run("FailsIfFileIsNotTOML", func(t *testing.T) {
-		_, err := NewTOMLSource("testdata/invalid.toml")
+		_, err := NewSource("testdata/invalid.toml")
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "parsing toml source")
 	})
 
 	t.Run("LoadsValidTOML", func(t *testing.T) {
-		s, err := NewTOMLSource("testdata/config.toml")
+		s, err := NewSource("testdata/config.toml")
 		require.NoError(t, err)
 		assert.NotNil(t, s)
 	})
 }
 
-func TestTOMLSource(t *testing.T) {
+func TestSource(t *testing.T) {
 	var tomlString = `
 [baz]
 spanm = 13
@@ -38,7 +38,7 @@ ham   = false
 	var data map[string]any
 	err := gotoml.Unmarshal([]byte(tomlString), &data)
 	require.NoError(t, err)
-	source := &tomlSource{data: data}
+	source := &Source{data: data}
 
 	t.Run("GetSuccess", func(t *testing.T) {
 		tests := []struct {
@@ -83,8 +83,8 @@ ham   = false
 	})
 }
 
-func TestTOMLSource_DatetimeTypes(t *testing.T) {
-	source, err := NewTOMLSource("testdata/datetime.toml")
+func TestSource_DatetimeTypes(t *testing.T) {
+	source, err := NewSource("testdata/datetime.toml")
 	require.NoError(t, err)
 
 	t.Run("OffsetDatetime_WholeSeconds", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestTOMLSource_DatetimeTypes(t *testing.T) {
 	})
 }
 
-func TestTOMLSource_StringifyTypes(t *testing.T) {
+func TestSource_StringifyTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    any

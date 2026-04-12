@@ -1,3 +1,4 @@
+// Package main provides a command-line interface for the flinn configuration loader.
 package main
 
 import (
