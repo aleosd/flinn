@@ -19,9 +19,9 @@ type Source struct {
 	data map[string]any
 }
 
-// NewSource reads and parses the TOML file at the given path.
+// NewTOMLSource reads and parses the TOML file at the given path.
 // Returns an error if the file cannot be read or is not valid TOML.
-func NewSource(path string) (*Source, error) {
+func NewTOMLSource(path string) (*Source, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("flinn: reading toml source: %w", err)

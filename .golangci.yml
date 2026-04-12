@@ -16,6 +16,10 @@ linters:
     - unparam
     - unused
     - whitespace
+  settings:
+    revive:
+      rules:
+        - name: exported
   exclusions:
     generated: lax
     paths:
@@ -25,13 +29,6 @@ linters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-linters-settings:
-  revive:
-    rules:
-      - name: exported
-        arguments:
-          - checkPrivateProxied: false
-            sayRepetitive: true
 
 formatters:
   enable:
