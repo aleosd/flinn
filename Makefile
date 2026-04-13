@@ -16,17 +16,12 @@ help: # Show help for each of the Makefile recipes.
 .PHONY: fmt
 fmt: # Format Go code (gofmt + goimports) across all modules.
 	@echo "==> Formatting code..."
-	@for m in $(MODULES); do (cd $$m && go fmt ./...); done
-
-.PHONY: vet
-vet: # Run go vet across all modules.
-	@echo "==> Vetting code..."
-	@for m in $(MODULES); do (cd $$m && go vet ./...); done
+	@set -e; for m in $(MODULES); do (cd $$m && goimports -w .); done
 
 .PHONY: test
 test: # Run all tests with verbose output across all modules.
 	@echo "==> Running tests..."
-	@for m in $(MODULES); do (cd $$m && go test -v ./...); done
+	@set -e; for m in $(MODULES); do (cd $$m && go test -v ./...); done
 
 .PHONY: lint
 lint: # Run golangci-lint for comprehensive static analysis.
@@ -42,14 +37,14 @@ lint: # Run golangci-lint for comprehensive static analysis.
 vulncheck: # Check for known vulnerabilities using govulncheck.
 	@echo "==> Checking for vulnerabilities with govulncheck..."
 	@if command -v govulncheck >/dev/null 2>&1; then \
-		for m in $(MODULES); do (cd $$m && govulncheck ./...); done; \
+		set -e; for m in $(MODULES); do (cd $$m && govulncheck ./...); done; \
 	else \
 		echo "govulncheck not found. Install it with: go install golang.org/x/vuln/cmd/govulncheck@latest"; \
 		exit 1; \
 	fi
 
 .PHONY: verify
-verify: fmt vet lint test vulncheck # Run all quality checks (fmt, vet, lint, test, vulncheck).
+verify: fmt lint test vulncheck # Run all quality checks (fmt, lint, test, vulncheck).
 	@echo "==> All quality checks passed successfully."
 
 .PHONY: build

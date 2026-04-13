@@ -2,6 +2,11 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+        - '**/*.md'
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -18,20 +23,34 @@ jobs:
           go-version-file: go.work
           cache: true
 
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Cache govulncheck
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/bin/govulncheck
+            ~/.cache/govulncheck
+          key: govulncheck-${{ runner.os }}-v1.2.0
+
+      - name: Cache goimports
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/goimports
+          key: goimports-${{ runner.os }}-v0.31.0
+
+      - name: Install tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.2.0
+          go install golang.org/x/tools/cmd/goimports@v0.31.0
 
       - name: Check formatting
         run: make fmt && git diff --exit-code
-
-      - name: Vet
-        run: make vet
 
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.10
           args: ./cmd/flinn/... ./pkg/flinn/... ./pkg/source/toml/...
+          cache-invalidation-interval: 15
 
       - name: Test
         run: make test
