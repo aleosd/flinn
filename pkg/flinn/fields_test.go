@@ -35,11 +35,11 @@ func TestMakeField(t *testing.T) {
 		return raw, nil
 	}
 	t.Run("TestFileKeyWithOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []fieldOption{FileKey("foo_bar")})
+		f := makeField("MyValue", &value, parser, []FieldOption{FileKey("foo_bar")})
 		assert.Equal(t, "foo_bar", f.fileKey)
 	})
 	t.Run("TestWithoutOptions", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []fieldOption{})
+		f := makeField("MyValue", &value, parser, []FieldOption{})
 		assert.Equal(t, "my_value", f.fileKey)
 		assert.Equal(t, "", f.envPrefix)
 		assert.Equal(t, "", f.envKey)
@@ -51,16 +51,16 @@ func TestMakeField(t *testing.T) {
 	})
 
 	t.Run("TestWithEnvOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []fieldOption{Env("FOO_BAR")})
+		f := makeField("MyValue", &value, parser, []FieldOption{Env("FOO_BAR")})
 		assert.Equal(t, "FOO_BAR", f.envKey)
 	})
 
 	t.Run("TestWithRequiredOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []fieldOption{Required()})
+		f := makeField("MyValue", &value, parser, []FieldOption{Required()})
 		assert.True(t, f.required)
 	})
 	t.Run("TestWithDefaultOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []fieldOption{Default("baZ")})
+		f := makeField("MyValue", &value, parser, []FieldOption{Default("baZ")})
 		assert.True(t, f.hasDefault)
 		assert.Equal(t, "baZ", f.defaultVal)
 	})
