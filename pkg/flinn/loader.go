@@ -121,6 +121,7 @@ func NewLoader(opts ...LoaderOption) *Loader {
 
 func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, errs *FieldErrors) {
 	for _, f := range fields {
+		l.log.Debug("walking field", "field", f.name, "kind", f.kind)
 		if f.kind == kindGroup {
 			// Groups don't hold a value themselves.
 			// They contribute a path segment and optionally an env prefix.
