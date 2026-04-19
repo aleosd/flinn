@@ -1,0 +1,7 @@
+[database]
+host = "my.db.net"
+port = 8080
+
+[api]
+host = "my.api.http"
+port = 8088

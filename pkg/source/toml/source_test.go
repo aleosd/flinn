@@ -17,7 +17,7 @@ func TestNewSource(t *testing.T) {
 	})
 
 	t.Run("FailsIfFileIsNotTOML", func(t *testing.T) {
-		_, err := NewTOMLSource("testdata/invalid.toml")
+		_, err := newFromBytes([]byte(`this is not valid toml = = =`))
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "parsing toml source")
 	})
@@ -84,7 +84,13 @@ ham   = false
 }
 
 func TestSource_DatetimeTypes(t *testing.T) {
-	source, err := NewTOMLSource("testdata/datetime.toml")
+	bytes := []byte(`offset_dt          = 2024-01-15T10:30:00Z
+offset_dt_subsecond = 2024-01-15T10:30:00.123456789Z
+local_dt  = 2024-01-15T10:30:00
+local_d   = 2024-01-15
+local_t   = 10:30:00
+`)
+	source, err := newFromBytes(bytes)
 	require.NoError(t, err)
 
 	t.Run("OffsetDatetime_WholeSeconds", func(t *testing.T) {
