@@ -4,10 +4,10 @@
 
 # Module directories (each has its own go.mod).
 # yaml is excluded until it contains Go source files.
-MODULES := cmd/flinn pkg/flinn pkg/source/toml
+MODULES := cmd/flinn . source/toml
 
 # Workspace-relative package patterns used by golangci-lint.
-PKGS := ./cmd/flinn/... ./pkg/flinn/... ./pkg/source/toml/...
+PKGS := ./cmd/flinn/... ./... ./source/toml/...
 
 .PHONY: help
 help: # Show help for each of the Makefile recipes.
