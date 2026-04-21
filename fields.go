@@ -112,7 +112,9 @@ func String(name string, dest *string, opts ...FieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// Int is a constructor for a configuration field with value of type int.
+// Int creates a configuration leaf Field that parses string values as base-10 integers
+// and assigns the parsed value to dest. FieldOption arguments can be used to configure
+// metadata such as environment/file keys, required/default behavior, and other field settings.
 func Int(name string, dest *int, opts ...FieldOption) Field {
 	assigner := func(raw string) (int, error) {
 		i, err := strconv.Atoi(raw)
@@ -124,7 +126,7 @@ func Int(name string, dest *int, opts ...FieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// Bool is a constructor for a configuration field with value of type bool.
+// The parser accepts common boolean text representations in a case-insensitive way and applies any provided FieldOption(s).
 func Bool(name string, dest *bool, opts ...FieldOption) Field {
 	assigner := func(raw string) (bool, error) {
 		b, err := strconv.ParseBool(strings.ToLower(raw))
@@ -136,7 +138,8 @@ func Bool(name string, dest *bool, opts ...FieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// Float is a constructor for a configuration field with value of type float64.
+// Float creates a configuration Field that parses a floating-point value from a raw string and writes it to dest.
+// The returned Field accepts FieldOption values to configure environment/file keys, defaults, and required behavior.
 func Float(name string, dest *float64, opts ...FieldOption) Field {
 	assigner := func(raw string) (float64, error) {
 		f, err := strconv.ParseFloat(raw, 64)
@@ -148,7 +151,7 @@ func Float(name string, dest *float64, opts ...FieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// UUID is a constructor for a configuration field with value of type uuid.
+// UUID constructs a Field representing a configuration leaf whose value is parsed as a UUID and stored in dest.
 func UUID(name string, dest *uuid.UUID, opts ...FieldOption) Field {
 	assigner := func(raw string) (uuid.UUID, error) {
 		return uuid.Parse(raw)
