@@ -126,7 +126,8 @@ func Int(name string, dest *int, opts ...FieldOption) Field {
 	return makeField(name, dest, assigner, opts)
 }
 
-// The parser accepts common boolean text representations in a case-insensitive way and applies any provided FieldOption(s).
+// Bool creates a configuration Field that parses a boolean value from a raw string and writes it to dest.
+// The value is converted to lower case before parsing, and strconv.ParseBool is used.
 func Bool(name string, dest *bool, opts ...FieldOption) Field {
 	assigner := func(raw string) (bool, error) {
 		b, err := strconv.ParseBool(strings.ToLower(raw))
@@ -139,7 +140,7 @@ func Bool(name string, dest *bool, opts ...FieldOption) Field {
 }
 
 // Float creates a configuration Field that parses a floating-point value from a raw string and writes it to dest.
-// The returned Field accepts FieldOption values to configure environment/file keys, defaults, and required behavior.
+// strconv.ParseFloat is used.
 func Float(name string, dest *float64, opts ...FieldOption) Field {
 	assigner := func(raw string) (float64, error) {
 		f, err := strconv.ParseFloat(raw, 64)
