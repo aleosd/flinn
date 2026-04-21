@@ -3,6 +3,8 @@ package flinn
 import (
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type fieldKind int
@@ -118,6 +120,38 @@ func Int(name string, dest *int, opts ...FieldOption) Field {
 			return 0, err
 		}
 		return i, nil
+	}
+	return makeField(name, dest, assigner, opts)
+}
+
+// Bool is a constructor for a configuration field with value of type bool.
+func Bool(name string, dest *bool, opts ...FieldOption) Field {
+	assigner := func(raw string) (bool, error) {
+		b, err := strconv.ParseBool(strings.ToLower(raw))
+		if err != nil {
+			return false, err
+		}
+		return b, nil
+	}
+	return makeField(name, dest, assigner, opts)
+}
+
+// Float is a constructor for a configuration field with value of type float64.
+func Float(name string, dest *float64, opts ...FieldOption) Field {
+	assigner := func(raw string) (float64, error) {
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return 0, err
+		}
+		return f, nil
+	}
+	return makeField(name, dest, assigner, opts)
+}
+
+// UUID is a constructor for a configuration field with value of type uuid.
+func UUID(name string, dest *uuid.UUID, opts ...FieldOption) Field {
+	assigner := func(raw string) (uuid.UUID, error) {
+		return uuid.Parse(raw)
 	}
 	return makeField(name, dest, assigner, opts)
 }
