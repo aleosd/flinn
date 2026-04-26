@@ -81,18 +81,18 @@ func main() {
 
 	var cfg Config
 
-	fields := []flinn.Field{
-		flinn.Group("database", []flinn.Field{
+	fields := flinn.DefineSchema(
+		flinn.FieldsGroup("database",
 			flinn.String("host", &cfg.Database.Host),
 			flinn.Int("port", &cfg.Database.Port),
 			flinn.String("username", &cfg.Database.Username),
 			flinn.String("password", &cfg.Database.Password),
-		}),
-		flinn.Group("api", []flinn.Field{
+		),
+		flinn.FieldsGroup("api",
 			flinn.String("host", &cfg.API.Host),
 			flinn.Int("port", &cfg.API.Port),
-		}),
-	}
+		),
+	)
 	if err := loader.Load(fields); err != nil {
 		logger.Error("error loading config", "error", err.Error())
 		os.Exit(1)
