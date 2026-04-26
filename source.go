@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// JSONSource loads configuration values from a JSON file.
+// jsonSource implements the Source interface for JSON files.
 // Nested objects are traversed using the path segments passed to Get,
 // matching the same dot-separated logical paths that the Loader constructs.
 type jsonSource struct {

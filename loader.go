@@ -44,8 +44,8 @@ func autoEnvKey(f ConfigItem, prefix string) string {
 	return joinEnvPrefix(prefix, key)
 }
 
-// A Source is an interface that must be implemented by any other struct
-// in order to be used as a source for configuration values.
+// Source is the interface that wraps the Get method for retrieving configuration values.
+// Any configuration provider (JSON, YAML, etc.) must implement this interface.
 type Source interface {
 	// Get retrieves a configuration value from the source at the specified path.
 	// It returns the raw string value, a boolean indicating if the value was found,
@@ -61,10 +61,9 @@ type Loader struct {
 	envKeyFunc envKeyFunc
 }
 
-// Load populates configuration struct, based on fields configuration provided
-// as an input array of Field objects. Each field is loaded sequentially,
-// environment variables take precedence over other sources.
-// Error of type FieldErrors is returned in case of any errors.
+// Load populates the configuration based on the provided fields.
+// Each field is resolved sequentially, with environment variables taking precedence
+// over other sources. It returns a FieldErrors collection if any errors occur.
 func (l *Loader) Load(fields []ConfigItem) error {
 	var errs FieldErrors
 	l.walk(fields, []string{}, l.envPrefix, &errs)
@@ -77,30 +76,30 @@ func (l *Loader) Load(fields []ConfigItem) error {
 // LoaderOption is a function type used to configure a Loader.
 type LoaderOption func(*Loader)
 
-// WithSource is a loader option that sets the source to use for loading configuration.
-// It accepts only objects with Source interface.
+// WithSource sets the configuration source (e.g., JSONSource) for the loader.
 func WithSource(source Source) LoaderOption {
 	return func(l *Loader) {
 		l.source = source
 	}
 }
 
-// WithEnvPrefix is a loader option that sets the prefix to use for environment variables.
+// WithEnvPrefix sets a global prefix for all environment variables.
 func WithEnvPrefix(envPrefix string) LoaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
 	}
 }
 
-// WithLogger is a loader option that sets the logger to use for logging.
+// WithLogger sets the logger used by the loader for debugging and warnings.
 func WithLogger(logger *slog.Logger) LoaderOption {
 	return func(l *Loader) {
 		l.log = logger
 	}
 }
 
-// WithAutoEnv is a loader option that enables automatic load of configuration from environment.
-// Variable names can be set per field using `Env()` or will be derived from the field name.
+// WithAutoEnv enables automatic resolution of environment variables based on field names.
+// If Env() is not explicitly called on a field, the environment variable name
+// will be derived from the field's path (e.g., "DATABASE_PORT").
 func WithAutoEnv() LoaderOption {
 	return func(l *Loader) {
 		l.envKeyFunc = autoEnvKey
@@ -201,4 +200,5 @@ func joinEnvPrefix(prefix, key string) string {
 	return prefix + "_" + key
 }
 
+// DefineSchema is a helper that groups multiple configuration items into a slice.
 func DefineSchema(fields ...ConfigItem) []ConfigItem { return fields }

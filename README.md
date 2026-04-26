@@ -11,12 +11,12 @@ ______________________________________________________________________
 ## Features
 
 - **Declarative field definitions** — describe your config schema with typed
-  constructors (`String`, `Int`, `Group`)
+  constructors (`String`, `Int`, `FieldsGroup`)
 - **Multiple sources** — environment variables, JSON, and TOML files, resolved
   in a defined precedence order
 - **Fail-complete error collection** — all field errors are gathered before
   returning, reported together as `FieldErrors`
-- **Nested config structs** — `Group` composes fields into namespaced path and
+- **Nested config structs** — `FieldsGroup` composes fields into namespaced path and
   env-prefix segments
 - **Auto env-var naming** — `WithAutoEnv()` derives env variable names from
   field names via `toSnakeCase` → uppercase
@@ -77,17 +77,17 @@ func main() {
     )
 
     var cfg Config
-    fields := []flinn.Field{
-        flinn.Group("database", []flinn.Field{
-            flinn.String("host", &cfg.Database.Host, flinn.Default("localhost")),
-            flinn.Int("port", &cfg.Database.Port, flinn.Default(5432)),
-            flinn.String("password", &cfg.Database.Password, flinn.Env("DB_PASSWORD"), flinn.Required()),
-        }, flinn.Env("DB")),
-        flinn.Group("api", []flinn.Field{
-            flinn.String("host", &cfg.API.Host, flinn.Default("0.0.0.0")),
-            flinn.Int("port", &cfg.API.Port, flinn.Default(8080)),
-        }),
-    }
+    fields := flinn.DefineSchema(
+        flinn.FieldsGroup("database",
+            flinn.String("host", &cfg.Database.Host).Default("localhost"),
+            flinn.Int("port", &cfg.Database.Port).Default(5432),
+            flinn.String("password", &cfg.Database.Password).Env("DB_PASSWORD").Required(),
+        ).EnvPrefix("DB"),
+        flinn.FieldsGroup("api",
+            flinn.String("host", &cfg.API.Host).Default("0.0.0.0"),
+            flinn.Int("port", &cfg.API.Port).Default(8080),
+        ),
+    )
 
     if err := loader.Load(fields); err != nil {
         fmt.Fprintln(os.Stderr, err)
@@ -98,7 +98,7 @@ func main() {
 }
 ```
 
-With `WithEnvPrefix("APP")`, `WithAutoEnv()`, and `Env("DB")` on the database
+With `WithEnvPrefix("APP")`, `WithAutoEnv()`, and `EnvPrefix("DB")` on the database
 group:
 
 - `cfg.Database.Host` ← env `APP_DB_HOST` → JSON `database.host` →
@@ -114,41 +114,56 @@ ______________________________________________________________________
 ### `String`
 
 ```go
-flinn.String("fieldName", &dest, opts...)
+flinn.String("fieldName", &dest).Required().Default("value")
 ```
 
 ### `Int`
 
 ```go
-flinn.Int("fieldName", &dest, opts...)
+flinn.Int("fieldName", &dest).Min(1).Max(100).Default(80)
 ```
 
-### `Group`
+Returns a `NumericField`, which supports range-based validation.
+
+### `Float`
+
+```go
+flinn.Float("fieldName", &dest).Min(0.0).Max(1.0)
+```
+
+Returns a `NumericField`, which supports range-based validation.
+
+### `FieldsGroup`
 
 Groups nest fields under a named path segment. They do not hold a value
 themselves.
 
 ```go
-flinn.Group("database", []flinn.Field{
+flinn.FieldsGroup("database",
     flinn.String("host", &cfg.Database.Host),
     flinn.Int("port", &cfg.Database.Port),
-}, opts...)
+).EnvPrefix("DB")
 ```
 
 A group's path segment (`database`) is used when looking up values in a source
-file. Its env-prefix contribution is controlled separately by the `Env` option
-— see [Loader Options](#loader-options).
+file. Its env-prefix contribution is controlled by the `EnvPrefix` method.
 
 ______________________________________________________________________
 
-## Field Options
+## Field Options (Methods)
 
-| Option            | Description                                                                                                           |
+Fields and Groups use a builder pattern for configuration:
+
+| Method            | Description                                                                                                           |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `Env("VAR_NAME")` | Explicit environment variable name for this field. On a Group, sets the env prefix segment contributed by that group. |
+| `Env("VAR_NAME")` | Explicit environment variable name for a Field.                                                                      |
+| `EnvPrefix("P")`  | Sets the environment variable prefix segment contributed by a Group.                                                  |
 | `FileKey("key")`  | Override the key used when reading from a source file (defaults to `toSnakeCase(name)`).                              |
 | `Default(value)`  | Value to use if nothing is found in env or source. Must match the field's type.                                       |
 | `Required()`      | Return an error if no value is found from any source and no default is set.                                           |
+| `Min(v)`          | (Numeric only) Ensures value is >= v.                                                                                 |
+| `Max(v)`          | (Numeric only) Ensures value is <= v.                                                                                 |
+| `AddValidator(f)` | Adds a custom validation function `func(T) error`.                                                                    |
 
 ______________________________________________________________________
 
@@ -181,27 +196,26 @@ flinn.NewLoader(flinn.WithSource(source))
 
 ### `WithEnvPrefix(prefix)`
 
-Prepend a string to all auto-generated env variable names.
+Prepend a global string to all env variable names.
 
 ```go
 flinn.NewLoader(flinn.WithEnvPrefix("MYAPP"))
-// field "host" → env "MYAPP_HOST"
+// field "host" → env "MYAPP_HOST" (if WithAutoEnv is enabled)
 ```
 
 ### `WithAutoEnv()`
 
-Enable automatic env variable derivation for leaf fields. The env key is
-computed as `toSnakeCase(name)` uppercased. **Groups do not automatically
-contribute to the env prefix** — add `Env("SEGMENT")` to a group explicitly if
-you want that.
+Enable automatic env variable derivation for leaf fields. If `Env()` is not
+explicitly set, the env key is computed from the field's path segments.
+**Groups contribute to the env prefix only if `EnvPrefix()` is called.**
 
 ```go
-// Without Env() on the group:
+// Without EnvPrefix() on the group:
 flinn.NewLoader(flinn.WithEnvPrefix("APP"), flinn.WithAutoEnv())
-// Group("database", [String("host", ...)]) → env APP_HOST (group name ignored)
+// FieldsGroup("database", flinn.String("host", ...)) → env APP_HOST
 
-// With Env() on the group:
-// Group("database", [...], flinn.Env("DB")) → env APP_DB_HOST
+// With EnvPrefix() on the group:
+// FieldsGroup("database", flinn.String("host", ...)).EnvPrefix("DB") → env APP_DB_HOST
 ```
 
 ### `WithLogger(logger)`
@@ -222,7 +236,7 @@ ______________________________________________________________________
 source, err := flinn.NewJSONSource("path/to/config.json")
 ```
 
-The root must be a JSON object. Nested objects map to `Group` path segments.
+The root must be a JSON object. Nested objects map to `FieldsGroup` path segments.
 
 ```json
 {
@@ -247,19 +261,9 @@ source, err := flinntoml.NewTOMLSource("path/to/config.toml")
 loader := flinn.NewLoader(flinn.WithSource(source))
 ```
 
-The root must be a TOML table. Nested tables map to `Group` path segments. All
+The root must be a TOML table. Nested tables map to `FieldsGroup` path segments. All
 scalar TOML types are supported: strings, integers, floats, booleans, and
 datetime types (offset datetime, local datetime, local date, local time).
-
-```toml
-[database]
-host = "localhost"
-port  = 5432
-
-[api]
-host = "0.0.0.0"
-port = 8080
-```
 
 ______________________________________________________________________
 
@@ -285,7 +289,7 @@ Each `FieldError` carries:
 | Field   | Description                                                                              |
 | ------- | ---------------------------------------------------------------------------------------- |
 | `Path`  | Dot-separated path to the field, e.g. `"database.port"`                                  |
-| `Rule`  | The rule that failed: `"required"`, `"parse"`, `"resolve"`, `"default"`, or `"validate"` |
+| `Rule`  | The rule that failed: `"required"`, `"parse"`, `"resolve"`, or `"validate"`              |
 | `Value` | The raw string value that was present (may be `nil` for required/missing errors)         |
 | `Msg`   | Human-readable error message                                                             |
 
@@ -305,20 +309,6 @@ type Source interface {
 (e.g. `["database", "host"]`). Return `("", false, nil)` when the key is
 absent, `(value, true, nil)` when found, or `("", false, err)` on a retrieval
 error.
-
-```go
-type EnvMapSource struct{ m map[string]string }
-
-func (s *EnvMapSource) Get(path []string) (string, bool, error) {
-    key := strings.Join(path, ".")
-    v, ok := s.m[key]
-    return v, ok, nil
-}
-
-loader := flinn.NewLoader(flinn.WithSource(&EnvMapSource{m: map[string]string{
-    "database.host": "localhost",
-}}))
-```
 
 ______________________________________________________________________
 

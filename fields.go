@@ -1,6 +1,8 @@
 package flinn
 
 import (
+	"cmp"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -15,6 +17,8 @@ const (
 	kindGroup
 )
 
+// ConfigItem represents a general item loaded from a configuration file.
+// It can be either a leaf value (Field) or a collection of items (Group).
 type ConfigItem interface {
 	fieldName() string
 	envKey() string
@@ -37,6 +41,8 @@ type leafMembers[T any] struct {
 	validators []func(T) error
 }
 
+// Group represents a collection of configuration items under a named scope.
+// It can be used to model nested structures in configuration files.
 type Group struct {
 	comm     *commonMembers
 	children []ConfigItem
@@ -68,7 +74,9 @@ func (g *Group) getPathSegment() string {
 
 type parser[T any] func(raw string) (T, error)
 
-// Field is a struct to configure a single configuration key.
+// Field represents a single configuration leaf node that parses values into type T.
+// It holds configuration for environment variable keys, file keys, default values,
+// and validation rules.
 type Field[T any] struct {
 	comm     *commonMembers
 	field    *leafMembers[T]
@@ -160,6 +168,59 @@ func (f *Field[T]) Default(val T) *Field[T] {
 	return f
 }
 
+// AddValidator adds a custom validation function to the field.
+// Validators are run after the value is parsed and assigned to the destination.
+func (f *Field[T]) AddValidator(fn func(T) error) *Field[T] {
+	f.field.validators = append(f.field.validators, fn)
+	return f
+}
+
+// NumericField is a specialized Field for ordered types (integers, floats)
+// that supports additional range-based validators like Min and Max.
+type NumericField[T cmp.Ordered] struct {
+	*Field[T]
+}
+
+// Min adds a validator that ensures the field value is greater than or equal to v.
+func (f *NumericField[T]) Min(v T) *NumericField[T] {
+	f.Field.AddValidator(func(val T) error {
+		if val < v {
+			return fmt.Errorf("must be >= %v", v)
+		}
+		return nil
+	})
+	return f
+}
+
+// Max adds a validator that ensures the field value is less than or equal to v.
+func (f *NumericField[T]) Max(v T) *NumericField[T] {
+	f.Field.AddValidator(func(val T) error {
+		if val > v {
+			return fmt.Errorf("must be <= %v", v)
+		}
+		return nil
+	})
+	return f
+}
+
+// Env sets an explicit environment variable name for this numeric field.
+func (f *NumericField[T]) Env(key string) *NumericField[T] { f.comm.envKey = key; return f }
+
+// FileKey sets an explicit configuration file key for this numeric field.
+func (f *NumericField[T]) FileKey(key string) *NumericField[T] { f.comm.fileKey = key; return f }
+
+// Required marks this numeric field as required.
+func (f *NumericField[T]) Required() *NumericField[T] { f.comm.required = true; return f }
+
+// Default sets a default value for this numeric field.
+func (f *NumericField[T]) Default(v T) *NumericField[T] { f.Field.Default(v); return f }
+
+// AddValidator adds a custom validation function to this numeric field.
+func (f *NumericField[T]) AddValidator(fn func(T) error) *NumericField[T] {
+	f.Field.AddValidator(fn)
+	return f
+}
+
 // makeField is the shared constructor logic for any leaf type.
 func makeField[T any](name string, dest *T, parse parser[T]) *Field[T] {
 	comm := &commonMembers{name: name}
@@ -184,7 +245,7 @@ func makeField[T any](name string, dest *T, parse parser[T]) *Field[T] {
 	return &f
 }
 
-// String is a constructor for a configuration field with value of type string.
+// String creates a configuration leaf Field that handles string values.
 func String(name string, dest *string) *Field[string] {
 	assigner := func(raw string) (string, error) {
 		return raw, nil
@@ -192,10 +253,9 @@ func String(name string, dest *string) *Field[string] {
 	return makeField(name, dest, assigner)
 }
 
-// Int creates a configuration leaf Field that parses string values as base-10 integers
-// and assigns the parsed value to dest. FieldOption arguments can be used to configure
-// metadata such as environment/file keys, required/default behavior, and other field settings.
-func Int(name string, dest *int) *Field[int] {
+// Int creates a configuration leaf Field that parses string values as base-10 integers.
+// It returns a NumericField, allowing for range-based validation (Min, Max).
+func Int(name string, dest *int) *NumericField[int] {
 	assigner := func(raw string) (int, error) {
 		i, err := strconv.Atoi(raw)
 		if err != nil {
@@ -203,7 +263,7 @@ func Int(name string, dest *int) *Field[int] {
 		}
 		return i, nil
 	}
-	return makeField(name, dest, assigner)
+	return &NumericField[int]{Field: makeField(name, dest, assigner)}
 }
 
 // Bool creates a configuration Field that parses a boolean value from a raw string and writes it to dest.
@@ -219,9 +279,9 @@ func Bool(name string, dest *bool) *Field[bool] {
 	return makeField(name, dest, assigner)
 }
 
-// Float creates a configuration Field that parses a floating-point value from a raw string and writes it to dest.
-// strconv.ParseFloat is used.
-func Float(name string, dest *float64) *Field[float64] {
+// Float creates a configuration Field that parses a floating-point value.
+// It returns a NumericField, allowing for range-based validation (Min, Max).
+func Float(name string, dest *float64) *NumericField[float64] {
 	assigner := func(raw string) (float64, error) {
 		f, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
@@ -229,7 +289,7 @@ func Float(name string, dest *float64) *Field[float64] {
 		}
 		return f, nil
 	}
-	return makeField(name, dest, assigner)
+	return &NumericField[float64]{Field: makeField(name, dest, assigner)}
 }
 
 // UUID constructs a Field representing a configuration leaf whose value is parsed as a UUID and stored in dest.
@@ -240,20 +300,21 @@ func UUID(name string, dest *uuid.UUID) *Field[uuid.UUID] {
 	return makeField(name, dest, assigner)
 }
 
-// FieldsGroup wraps a set of children fields under a named scope.
-// Used to represent a nested configuration structures - maps.
-// Options on a group apply to the group itself (prefix, file key).
+// FieldsGroup creates a new Group that wraps multiple configuration items under a named scope.
+// It is used to represent nested configuration structures.
 func FieldsGroup(name string, children ...ConfigItem) *Group {
 	comm := &commonMembers{name: name}
 	var f = Group{comm: comm, children: children}
 	return &f
 }
 
+// EnvPrefix sets the environment variable prefix for all children of this group.
 func (g *Group) EnvPrefix(prefix string) *Group {
 	g.comm.envKey = prefix
 	return g
 }
 
+// FileKey sets the configuration file key for this group.
 func (g *Group) FileKey(key string) *Group {
 	g.comm.fileKey = key
 	return g
