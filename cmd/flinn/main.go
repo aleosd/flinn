@@ -32,41 +32,43 @@ type Config struct {
 var supportedLogLevels = []string{"debug", "info", "warn", "error"}
 
 func main() {
-	filPath := flag.String("config", "", "Path to configuration file")
+	filePath := flag.String("config", "", "Path to configuration file")
 	logLevel := flag.String("log", "debug", "Log level (debug|info|warn|error)")
 	flag.Parse()
-	ll := slog.LevelInfo
-	if logLevel != nil {
-		level := strings.ToLower(strings.TrimSpace(*logLevel))
-		if slices.Contains(supportedLogLevels, level) {
-			switch level {
-			case "debug":
-				ll = slog.LevelDebug
-			case "info":
-				ll = slog.LevelInfo
-			case "warn":
-				ll = slog.LevelWarn
-			case "error":
-				ll = slog.LevelError
-			}
-		} else {
-			log.Printf("Unknown log level '%s', using '%s' as default", *logLevel, ll.String())
+	ll := slog.LevelDebug
+	level := strings.ToLower(strings.TrimSpace(*logLevel))
+	if slices.Contains(supportedLogLevels, level) {
+		switch level {
+		case "debug":
+			ll = slog.LevelDebug
+		case "info":
+			ll = slog.LevelInfo
+		case "warn":
+			ll = slog.LevelWarn
+		case "error":
+			ll = slog.LevelError
 		}
+	} else {
+		log.Printf("Unknown log level '%s', using '%s' as default", *logLevel, ll.String())
 	}
 
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: ll})
 	logger := slog.New(handler)
 
-	logger.Info("loading configuration", "path", *filPath)
+	if *filePath == "" {
+		logger.Error("No config file provided. Use -config flag.")
+		os.Exit(1)
+	}
+	logger.Info("loading configuration", "path", *filePath)
 
-	fileFormat := strings.ToLower(filepath.Ext(*filPath))
+	fileFormat := strings.ToLower(filepath.Ext(*filePath))
 	var err error
 	var source flinn.Source
 	switch fileFormat {
 	case ".json":
-		source, err = flinn.NewJSONSource(*filPath)
+		source, err = flinn.NewJSONSource(*filePath)
 	case ".toml":
-		source, err = flinntoml.NewTOMLSource(*filPath)
+		source, err = flinntoml.NewTOMLSource(*filePath)
 	default:
 		logger.Error("Unknown file format", "format", fileFormat)
 		os.Exit(1)
@@ -83,18 +85,24 @@ func main() {
 
 	fields := flinn.DefineSchema(
 		flinn.FieldsGroup("database",
-			flinn.String("host", &cfg.Database.Host),
-			flinn.Int("port", &cfg.Database.Port),
-			flinn.String("username", &cfg.Database.Username),
-			flinn.String("password", &cfg.Database.Password),
+			flinn.String("host", &cfg.Database.Host).Default("localhost"),
+			flinn.Int("port", &cfg.Database.Port).Min(1).Max(65535),
+			flinn.String("username", &cfg.Database.Username).Required(),
+			flinn.String("password", &cfg.Database.Password).Required(),
 		),
 		flinn.FieldsGroup("api",
-			flinn.String("host", &cfg.API.Host),
-			flinn.Int("port", &cfg.API.Port),
+			flinn.String("host", &cfg.API.Host).Default("localhost"),
+			flinn.Int("port", &cfg.API.Port).Min(1).Max(65535),
 		),
 	)
 	if err := loader.Load(fields); err != nil {
-		logger.Error("error loading config", "error", err.Error())
+		if fieldErrs, ok := err.(flinn.FieldErrors); ok {
+			for _, fe := range fieldErrs {
+				logger.Error("config field error", "path", fe.Path, "rule", fe.Rule, "msg", fe.Msg)
+			}
+		} else {
+			logger.Error("error loading config", "error", err.Error())
+		}
 		os.Exit(1)
 	}
 

@@ -18,6 +18,7 @@
 package flinn
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -124,17 +125,27 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 		if f.fieldKind() == kindGroup {
 			// Groups don't hold a value themselves.
 			// They contribute a path segment and optionally an env prefix.
-			f := f.(*Group)
-			childEnvPrefix := joinEnvPrefix(envPrefix, f.comm.envKey)
-			childPathSegments := append(pathSegments, f.getPathSegment())
-			l.walk(f.childrenNodes(), childPathSegments, childEnvPrefix, errs)
+			g, ok := f.(*Group)
+			if !ok {
+				errs.add(f.fieldName(), "type", nil,
+					fmt.Sprintf("expected *Group for field kind %d, got %T", kindGroup, f))
+				continue
+			}
+			childEnvPrefix := joinEnvPrefix(envPrefix, g.comm.envKey)
+			childPathSegments := append(pathSegments, g.getPathSegment())
+			l.walk(g.childrenNodes(), childPathSegments, childEnvPrefix, errs)
 			continue
 		}
 
 		// Leaf field: resolve, coerce, validate.
-		f := f.(leafField)
-		envKey := l.envKeyFunc(f, envPrefix)
-		keyPath := append(pathSegments, f.getPathSegment())
+		lf, ok := f.(leafField)
+		if !ok {
+			errs.add(f.fieldName(), "type", nil,
+				fmt.Sprintf("expected leafField for field kind %d, got %T", f.fieldKind(), f))
+			continue
+		}
+		envKey := l.envKeyFunc(lf, envPrefix)
+		keyPath := append(pathSegments, lf.getPathSegment())
 		logicalPath := strings.Join(keyPath, ".")
 		rawVal, found, err := l.resolve(keyPath, envKey)
 		if err != nil {
@@ -142,25 +153,25 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 			continue
 		}
 		if !found {
-			if f.hasDefaultVal() {
-				l.log.Debug("applying default value", "field", f.fieldName())
-				f.applyDefault()
+			if lf.hasDefaultVal() {
+				l.log.Debug("applying default value", "field", lf.fieldName())
+				lf.applyDefault()
 				continue
 			}
-			if f.isRequired() {
+			if lf.isRequired() {
 				errs.add(logicalPath, "required", nil, "value is required but was not provided")
 				l.log.Warn("required value is missing", "path", logicalPath)
 			}
 			continue
 		}
 
-		if err := f.assignRaw(rawVal); err != nil {
+		if err := lf.assignRaw(rawVal); err != nil {
 			errs.add(logicalPath, "parse", rawVal, err.Error())
 			continue
 		}
 
 		// Run validation rules against the now-typed value.
-		f.runValidators(logicalPath, errs, l.log)
+		lf.runValidators(logicalPath, errs, l.log)
 	}
 }
 
@@ -186,7 +197,7 @@ func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, er
 	if !found {
 		return "", false, nil
 	}
-	l.log.Debug("resolved value from source", "", pathSegments)
+	l.log.Debug("resolved value from source", "path", pathSegments)
 	return v, true, nil
 }
 

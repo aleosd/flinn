@@ -70,6 +70,22 @@ func TestMakeField(t *testing.T) {
 	})
 }
 
+func TestNumericFieldRequired(t *testing.T) {
+	t.Run("IntRequired", func(t *testing.T) {
+		var value int
+		f := Int("MyValue", &value).Required()
+		assert.True(t, f.required)
+		assert.True(t, f.isRequired())
+	})
+
+	t.Run("FloatRequired", func(t *testing.T) {
+		var value float64
+		f := Float("MyValue", &value).Required()
+		assert.True(t, f.required)
+		assert.True(t, f.isRequired())
+	})
+}
+
 func TestUUIDField(t *testing.T) {
 	t.Run("TestSuccess", func(t *testing.T) {
 		var value uuid.UUID

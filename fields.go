@@ -29,10 +29,9 @@ type ConfigItem interface {
 }
 
 type commonMembers struct {
-	name     string
-	envKey   string
-	fileKey  string
-	required bool
+	name    string
+	envKey  string
+	fileKey string
 }
 
 type leafMembers[T any] struct {
@@ -78,11 +77,10 @@ type parser[T any] func(raw string) (T, error)
 // It holds configuration for environment variable keys, file keys, default values,
 // and validation rules.
 type Field[T any] struct {
-	comm     *commonMembers
-	field    *leafMembers[T]
-	assign   func(raw string) error
-	dest     *T
-	children []ConfigItem
+	comm   *commonMembers
+	field  *leafMembers[T]
+	assign func(raw string) error
+	dest   *T
 
 	envPrefix string
 	required  bool
@@ -204,13 +202,13 @@ func (f *NumericField[T]) Max(v T) *NumericField[T] {
 }
 
 // Env sets an explicit environment variable name for this numeric field.
-func (f *NumericField[T]) Env(key string) *NumericField[T] { f.comm.envKey = key; return f }
+func (f *NumericField[T]) Env(key string) *NumericField[T] { f.Field.Env(key); return f }
 
 // FileKey sets an explicit configuration file key for this numeric field.
-func (f *NumericField[T]) FileKey(key string) *NumericField[T] { f.comm.fileKey = key; return f }
+func (f *NumericField[T]) FileKey(key string) *NumericField[T] { f.Field.FileKey(key); return f }
 
 // Required marks this numeric field as required.
-func (f *NumericField[T]) Required() *NumericField[T] { f.comm.required = true; return f }
+func (f *NumericField[T]) Required() *NumericField[T] { f.Field.Required(); return f }
 
 // Default sets a default value for this numeric field.
 func (f *NumericField[T]) Default(v T) *NumericField[T] { f.Field.Default(v); return f }

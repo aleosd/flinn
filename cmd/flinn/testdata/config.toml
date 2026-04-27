@@ -1,6 +1,8 @@
 [database]
 host = "my.db.net"
 port = 8080
+username = "dbuser"
+password = "dbpass"
 
 [api]
 host = "my.api.http"
