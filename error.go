@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// FieldError represents an error that occurred while loading or validating a specific configuration field.
+// FieldError is a single error for a specific configuration field.
 type FieldError struct {
-	Path  string // "Database.Primary.Port"
-	Rule  string // "required" | "min" | "max" | "oneof" | "parse" | "custom"
+	Path  string // dot-separated path, e.g., "database.port"
+	Rule  string // "required", "parse", "resolve", "validate", "type", "min", "max"
 	Value any    // the offending value, nil if absent
 	Msg   string
 }

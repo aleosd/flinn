@@ -1,23 +1,27 @@
-// Package flinn provides a declarative configuration loader for Go structs.
-// It supports loading values from environment variables, file-based sources (like YAML/JSON),
-// and validating them with rules.
+// Package flinn provides a declarative, type-safe configuration loader for Go.
+// It resolves values from environment variables, JSON files, and custom sources,
+// with support for defaults, required fields, and validation.
 //
 // # Core Concepts
 //
 //   - Loader: Orchestrates loading from multiple sources.
-//   - Field: Definition for a single configuration value, created by `String()`, `Int()`, etc.
-//   - Source: An interface for providing values from a structured source (e.g., a YAML file).
+//   - Field: Definition for a single configuration value, created by [String], [Int], etc.
+//   - Source: An interface for providing values from a structured source (e.g., a JSON file).
+//   - Group: A collection of fields that share a namespace for file paths and env prefixes.
 //
-// Values are resolved in the following order of precedence:
+// Values are resolved in the following order of precedence (highest to lowest):
 //
-//  1. Environment variable (if an enabled for field or loader)
-//  2. Source (e.g., configuration file)
+//  1. Environment variable (if enabled for the field or loader)
+//  2. Config source (e.g., JSON or TOML file)
 //  3. Default value (if set)
+//  4. Required error (if the field is required and nothing resolved)
 //
-// If a required field has no value, loading fails with a FieldErrors collection.
+// If one or more fields fail to resolve or validate, loading returns a [FieldErrors]
+// collection so every problem is reported at once.
 package flinn
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -28,32 +32,34 @@ var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 // envKeyFunc derives the effective environment variable key for a field.
 // prefix is the accumulated env prefix at the current walk depth.
-type envKeyFunc func(f Field, prefix string) string
+type envKeyFunc func(f ConfigItem, prefix string) string
 
 // explicitEnvKey is the default: only use a key if Env() was explicitly set.
-func explicitEnvKey(f Field, prefix string) string {
-	return joinEnvPrefix(prefix, f.envKey)
+func explicitEnvKey(f ConfigItem, prefix string) string {
+	return joinEnvPrefix(prefix, f.envSegment())
 }
 
 // autoEnvKey falls back to the uppercased snake_case field name.
-func autoEnvKey(f Field, prefix string) string {
-	key := f.envKey
+func autoEnvKey(f ConfigItem, prefix string) string {
+	key := f.envSegment()
 	if key == "" {
 		key = strings.ToUpper(f.getPathSegment())
 	}
 	return joinEnvPrefix(prefix, key)
 }
 
-// A Source is an interface that must be implemented by any other struct
-// in order to be used as a source for configuration values.
+// Source is the interface for configuration backends.
+// Implementations provide values from structured sources such as JSON or TOML files.
 type Source interface {
-	// Get retrieves a configuration value from the source at the specified path.
-	// It returns the raw string value, a boolean indicating if the value was found,
-	// and an error if the retrieval failed.
+	// Get retrieves a configuration value at the given path.
+	// path is a sequence of key segments corresponding to nested positions
+	// (e.g., ["database", "host"]).
+	// Returns the raw string value, true when found, or an error on retrieval failure.
+	// When the key is absent, return ("", false, nil).
 	Get(path []string) (string, bool, error)
 }
 
-// Loader is responsible for base configuration and configuration loading.
+// Loader resolves configuration values from multiple sources.
 type Loader struct {
 	source     Source
 	envPrefix  string
@@ -61,11 +67,10 @@ type Loader struct {
 	envKeyFunc envKeyFunc
 }
 
-// Load populates configuration struct, based on fields configuration provided
-// as an input array of Field objects. Each field is loaded sequentially,
-// environment variables take precedence over other sources.
-// Error of type FieldErrors is returned in case of any errors.
-func (l *Loader) Load(fields []Field) error {
+// Load populates the configuration based on the provided fields.
+// Each field is resolved sequentially, with environment variables taking precedence
+// over other sources. It returns a FieldErrors collection if any errors occur.
+func (l *Loader) Load(fields []ConfigItem) error {
 	var errs FieldErrors
 	l.walk(fields, []string{}, l.envPrefix, &errs)
 	if len(errs) > 0 {
@@ -77,30 +82,31 @@ func (l *Loader) Load(fields []Field) error {
 // LoaderOption is a function type used to configure a Loader.
 type LoaderOption func(*Loader)
 
-// WithSource is a loader option that sets the source to use for loading configuration.
-// It accepts only objects with Source interface.
+// WithSource sets the configuration source (e.g., JSONSource) for the loader.
 func WithSource(source Source) LoaderOption {
 	return func(l *Loader) {
 		l.source = source
 	}
 }
 
-// WithEnvPrefix is a loader option that sets the prefix to use for environment variables.
+// WithEnvPrefix sets a global prefix for auto-generated environment variable names.
+// Explicit env names set via [Field.Env] are not prefixed.
 func WithEnvPrefix(envPrefix string) LoaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
 	}
 }
 
-// WithLogger is a loader option that sets the logger to use for logging.
+// WithLogger sets the logger used by the loader for debugging and warnings.
 func WithLogger(logger *slog.Logger) LoaderOption {
 	return func(l *Loader) {
 		l.log = logger
 	}
 }
 
-// WithAutoEnv is a loader option that enables automatic load of configuration from environment.
-// Variable names can be set per field using `Env()` or will be derived from the field name.
+// WithAutoEnv enables automatic resolution of environment variables based on field names.
+// If Env() is not explicitly called on a field, the environment variable name
+// will be derived from the field's path (e.g., "DATABASE_PORT").
 func WithAutoEnv() LoaderOption {
 	return func(l *Loader) {
 		l.envKeyFunc = autoEnvKey
@@ -119,21 +125,35 @@ func NewLoader(opts ...LoaderOption) *Loader {
 	return l
 }
 
-func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, errs *FieldErrors) {
+func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix string, errs *FieldErrors) {
 	for _, f := range fields {
-		l.log.Debug("walking field", "field", f.name, "kind", f.kind)
-		if f.kind == kindGroup {
+		l.log.Debug("walking field", "field", f.fieldName(), "kind", f.fieldKind())
+		if f.fieldKind() == kindGroup {
 			// Groups don't hold a value themselves.
 			// They contribute a path segment and optionally an env prefix.
-			childEnvPrefix := joinEnvPrefix(envPrefix, f.envKey)
-			childPathSegments := append(pathSegments, f.getPathSegment())
-			l.walk(f.children, childPathSegments, childEnvPrefix, errs)
+			g, ok := f.(*Group)
+			if !ok {
+				path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
+				errs.add(path, "type", nil,
+					fmt.Sprintf("expected *Group for field kind %d, got %T", kindGroup, f))
+				continue
+			}
+			childEnvPrefix := joinEnvPrefix(envPrefix, g.comm.envSegment)
+			childPathSegments := append(pathSegments, g.getPathSegment())
+			l.walk(g.childrenNodes(), childPathSegments, childEnvPrefix, errs)
 			continue
 		}
 
 		// Leaf field: resolve, coerce, validate.
-		envKey := l.envKeyFunc(f, envPrefix)
-		keyPath := append(pathSegments, f.getPathSegment())
+		lf, ok := f.(leafField)
+		if !ok {
+			path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
+			errs.add(path, "type", nil,
+				fmt.Sprintf("expected leafField for field kind %d, got %T", f.fieldKind(), f))
+			continue
+		}
+		envKey := l.envKeyFunc(lf, envPrefix)
+		keyPath := append(pathSegments, lf.getPathSegment())
 		logicalPath := strings.Join(keyPath, ".")
 		rawVal, found, err := l.resolve(keyPath, envKey)
 		if err != nil {
@@ -141,44 +161,31 @@ func (l *Loader) walk(fields []Field, pathSegments []string, envPrefix string, e
 			continue
 		}
 		if !found {
-			if f.hasDefault {
-				if f.applyDefault != nil {
-					l.log.Debug("applying default value", "field", f.name, "value", f.defaultVal)
-					f.applyDefault()
-				} else {
-					l.log.Warn("default value is set, but can not be applied", "path", logicalPath, "value", f.defaultVal)
-					errs.add(logicalPath, "default", nil, "bad default value (type mistmatch?)")
-				}
+			if lf.hasDefaultVal() {
+				l.log.Debug("applying default value", "field", lf.fieldName())
+				lf.applyDefault()
 				continue
 			}
-			if f.required {
+			if lf.isRequired() {
 				errs.add(logicalPath, "required", nil, "value is required but was not provided")
 				l.log.Warn("required value is missing", "path", logicalPath)
 			}
 			continue
 		}
 
-		if err := f.assign(rawVal); err != nil {
+		if err := lf.assignRaw(rawVal); err != nil {
 			errs.add(logicalPath, "parse", rawVal, err.Error())
 			continue
 		}
 
 		// Run validation rules against the now-typed value.
-		l.validate(logicalPath, f.dest, f, errs)
-	}
-}
-
-func (l *Loader) validate(path string, val any, f Field, errs *FieldErrors) {
-	for _, v := range f.validators {
-		if err := v(val); err != nil {
-			errs.add(path, "validate", val, err.Error())
-			l.log.Warn("validation failed", path, err.Error())
-		}
+		lf.runValidators(logicalPath, errs, l.log)
 	}
 }
 
 // resolve tries each source in order, returning the first hit.
-// The env key used is: envPrefix + "_" + def.envKey (if both are set).
+// It first checks the environment variable keyed by envKey, then falls back
+// to the registered config source at pathSegments.
 func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, error) {
 	// Try env variable first
 	if envKey != "" {
@@ -199,7 +206,7 @@ func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, er
 	if !found {
 		return "", false, nil
 	}
-	l.log.Debug("resolved value from source", "", pathSegments)
+	l.log.Debug("resolved value from source", "path", pathSegments)
 	return v, true, nil
 }
 
@@ -212,3 +219,7 @@ func joinEnvPrefix(prefix, key string) string {
 	}
 	return prefix + "_" + key
 }
+
+// DefineSchema groups configuration items into a slice for [Loader.Load].
+// It is a convenience helper with no runtime effect.
+func DefineSchema(fields ...ConfigItem) []ConfigItem { return fields }

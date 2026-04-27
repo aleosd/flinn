@@ -39,34 +39,48 @@ func TestMakeField(t *testing.T) {
 		return raw, nil
 	}
 	t.Run("TestFileKeyWithOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []FieldOption{FileKey("foo_bar")})
-		assert.Equal(t, "foo_bar", f.fileKey)
+		f := String("MyValue", &value).FileKey("foo_bar")
+		assert.Equal(t, "foo_bar", f.comm.fileKey)
 	})
 	t.Run("TestWithoutOptions", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []FieldOption{})
-		assert.Equal(t, "my_value", f.fileKey)
-		assert.Equal(t, "", f.envPrefix)
-		assert.Equal(t, "", f.envKey)
+		f := makeField("MyValue", &value, parser)
+		assert.Equal(t, "my_value", f.comm.fileKey)
+		assert.Equal(t, "", f.envSegment())
 		assert.False(t, f.required)
-		assert.False(t, f.hasDefault)
-		assert.Nil(t, f.defaultVal)
-		assert.Empty(t, f.oneOf)
-		assert.Empty(t, f.validators)
+		assert.False(t, f.field.hasDefault)
+		assert.Equal(t, "", f.field.defaultVal)
+		assert.Empty(t, f.field.validators)
 	})
 
 	t.Run("TestWithEnvOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []FieldOption{Env("FOO_BAR")})
-		assert.Equal(t, "FOO_BAR", f.envKey)
+		f := makeField("MyValue", &value, parser).Env("FOO_BAR")
+		assert.Equal(t, "FOO_BAR", f.comm.envSegment)
 	})
 
 	t.Run("TestWithRequiredOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []FieldOption{Required()})
+		f := makeField("MyValue", &value, parser).Required()
 		assert.True(t, f.required)
 	})
 	t.Run("TestWithDefaultOption", func(t *testing.T) {
-		f := makeField("MyValue", &value, parser, []FieldOption{Default("baZ")})
-		assert.True(t, f.hasDefault)
-		assert.Equal(t, "baZ", f.defaultVal)
+		f := makeField("MyValue", &value, parser).Default("baZ")
+		assert.True(t, f.field.hasDefault)
+		assert.Equal(t, "baZ", f.field.defaultVal)
+	})
+}
+
+func TestNumericFieldRequired(t *testing.T) {
+	t.Run("IntRequired", func(t *testing.T) {
+		var value int
+		f := Int("MyValue", &value).Required()
+		assert.True(t, f.required)
+		assert.True(t, f.isRequired())
+	})
+
+	t.Run("FloatRequired", func(t *testing.T) {
+		var value float64
+		f := Float("MyValue", &value).Required()
+		assert.True(t, f.required)
+		assert.True(t, f.isRequired())
 	})
 }
 

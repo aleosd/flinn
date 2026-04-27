@@ -53,12 +53,12 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		t.Setenv("HOST", host)
 		t.Setenv("ROOT_URL", rootURL)
 		var cfg TestConfig
-		fields := []Field{
-			Group("database", []Field{
-				String("host", &cfg.Database.Host, Env("HOST")),
-				Int("port", &cfg.Database.Port, Env("PORT")),
-			}),
-			String("root_url", &cfg.RootURL, Env("ROOT_URL")),
+		fields := []ConfigItem{
+			FieldsGroup("database",
+				String("host", &cfg.Database.Host).Env("HOST"),
+				Int("port", &cfg.Database.Port).Env("PORT"),
+			),
+			String("root_url", &cfg.RootURL).Env("ROOT_URL"),
 		}
 		loader := NewLoader()
 
@@ -81,12 +81,12 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		t.Setenv("FL_DB_HOST", host)
 		t.Setenv("FL_ROOT_URL", rootURL)
 		var cfg TestConfig
-		fields := []Field{
-			Group("database", []Field{
-				String("host", &cfg.Database.Host, Env("HOST")),
-				Int("port", &cfg.Database.Port, Env("PORT")),
-			}, Env("DB")),
-			String("root_url", &cfg.RootURL, Env("ROOT_URL")),
+		fields := []ConfigItem{
+			FieldsGroup("database",
+				String("host", &cfg.Database.Host).Env("HOST"),
+				Int("port", &cfg.Database.Port).Env("PORT"),
+			).EnvPrefix("DB"),
+			String("root_url", &cfg.RootURL).Env("ROOT_URL"),
 		}
 		loader := NewLoader(WithEnvPrefix("FL"))
 
@@ -109,12 +109,12 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		t.Setenv("FL_HOST", host)
 		t.Setenv("FL_ROOT_URL", rootURL)
 		var cfg TestConfig
-		fields := []Field{
-			Group("database", []Field{
-				String("host", &cfg.Database.Host, Env("HOST")),
-				Int("port", &cfg.Database.Port, Env("PORT")),
-			}),
-			String("root_url", &cfg.RootURL, Env("ROOT_URL")),
+		fields := []ConfigItem{
+			FieldsGroup("database",
+				String("host", &cfg.Database.Host).Env("HOST"),
+				Int("port", &cfg.Database.Port).Env("PORT"),
+			),
+			String("root_url", &cfg.RootURL).Env("ROOT_URL"),
 		}
 		loader := NewLoader(WithEnvPrefix("FL"))
 
@@ -137,11 +137,11 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 		t.Setenv("HOST", host)
 		t.Setenv("ROOT_URL", rootURL)
 		var cfg TestConfig
-		fields := []Field{
-			Group("database", []Field{
+		fields := []ConfigItem{
+			FieldsGroup("database",
 				String("host", &cfg.Database.Host),
 				Int("port", &cfg.Database.Port),
-			}),
+			),
 			String("root_url", &cfg.RootURL),
 		}
 		loader := NewLoader(WithAutoEnv())
@@ -169,11 +169,11 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 	t.Run("loads data from source", func(t *testing.T) {
 		// arrange
 		var cfg TestConfig
-		fields := []Field{
-			Group("database", []Field{
+		fields := []ConfigItem{
+			FieldsGroup("database",
 				String("host", &cfg.Database.Host),
 				Int("port", &cfg.Database.Port),
-			}),
+			),
 			String("root_url", &cfg.RootURL),
 		}
 		source := inMemorySource{data: sourceData}
@@ -192,11 +192,11 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 	t.Run("loads data from source with to snakecase conversion", func(t *testing.T) {
 		// arrange
 		var cfg TestConfig
-		fields := []Field{
-			Group("Database", []Field{
+		fields := []ConfigItem{
+			FieldsGroup("Database",
 				String("Host", &cfg.Database.Host),
 				Int("Port", &cfg.Database.Port),
-			}),
+			),
 			String("RootURL", &cfg.RootURL),
 		}
 		source := inMemorySource{data: sourceData}
@@ -215,12 +215,12 @@ func TestLoader_LoadsFromSource(t *testing.T) {
 	t.Run("loads data based on file key option", func(t *testing.T) {
 		// arrange
 		var cfg TestConfig
-		fields := []Field{
-			Group("DB", []Field{
-				String("host_name", &cfg.Database.Host, FileKey("host")),
+		fields := []ConfigItem{
+			FieldsGroup("DB",
+				String("host_name", &cfg.Database.Host).FileKey("host"),
 				Int("Port", &cfg.Database.Port),
-			}, FileKey("database")),
-			String("root_endpoint", &cfg.RootURL, FileKey("root_url")),
+			).FileKey("database"),
+			String("root_endpoint", &cfg.RootURL).FileKey("root_url"),
 		}
 		source := inMemorySource{data: sourceData}
 		loader := NewLoader(WithSource(source))
@@ -241,8 +241,8 @@ func TestLoader_DefaultOption(t *testing.T) {
 		// arrange
 		var cfg TestConfig
 		url := "http://example.com"
-		fields := []Field{
-			String("host", &cfg.RootURL, Default(url)),
+		fields := []ConfigItem{
+			String("host", &cfg.RootURL).Default(url),
 		}
 		loader := NewLoader()
 
@@ -259,8 +259,8 @@ func TestLoader_DefaultOption(t *testing.T) {
 		var cfg TestConfig
 		url := "http://example.com"
 		envURL := "https://my-domain.com"
-		fields := []Field{
-			String("root_url", &cfg.RootURL, Default(url), Env("ROOT_URL")),
+		fields := []ConfigItem{
+			String("root_url", &cfg.RootURL).Default(url).Env("ROOT_URL"),
 		}
 		loader := NewLoader()
 		t.Setenv("ROOT_URL", envURL)
@@ -281,8 +281,8 @@ func TestLoader_DefaultOption(t *testing.T) {
 		var sourceData = map[string]any{
 			"root_url": sourceURL,
 		}
-		fields := []Field{
-			String("root_url", &cfg.RootURL, Default(url)),
+		fields := []ConfigItem{
+			String("root_url", &cfg.RootURL).Default(url),
 		}
 		loader := NewLoader(WithSource(inMemorySource{data: sourceData}))
 

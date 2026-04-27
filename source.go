@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// JSONSource loads configuration values from a JSON file.
+// jsonSource implements the Source interface for JSON files.
 // Nested objects are traversed using the path segments passed to Get,
 // matching the same dot-separated logical paths that the Loader constructs.
 type jsonSource struct {
@@ -15,6 +15,7 @@ type jsonSource struct {
 }
 
 // NewJSONSource reads and parses the JSON file at the given path.
+// The root of the JSON document must be an object.
 // Returns an error if the file cannot be read or is not valid JSON.
 func NewJSONSource(path string) (Source, error) {
 	b, err := os.ReadFile(path)
