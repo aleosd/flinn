@@ -91,11 +91,16 @@ func main() {
 With `WithEnvPrefix("APP")`, `WithAutoEnv()`, and `EnvPrefix("DB")` on the
 database group, here's how a few fields resolve:
 
-| Field               | Env var                  | File key            | Fallback         |
-| ------------------- | ------------------------ | ------------------- | ---------------- |
-| `Database.Host`     | `APP_DB_HOST`            | `database.host`     | `"localhost"`    |
-| `Database.Password` | `DB_PASSWORD` (explicit) | `database.password` | error (required) |
-| `API.Port`          | `APP_API_PORT`           | `api.port`          | `8080`           |
+| Field               | Env var                      | File key            | Fallback         |
+| ------------------- | ---------------------------- | ------------------- | ---------------- |
+| `Database.Host`     | `APP_DB_HOST`                | `database.host`     | `"localhost"`    |
+| `Database.Password` | `APP_DB_DB_PASSWORD`         | `database.password` | error (required) |
+| `API.Port`          | `APP_PORT`                   | `api.port`          | `8080`           |
+
+Env names are built by `joinEnvPrefix`, which concatenates the loader prefix
+(`WithEnvPrefix`), group prefixes (`EnvPrefix`), and the field key in that
+order. Explicit `Env(...)` values are prefixed too — they are not treated as
+absolute names.
 
 ## Field types
 
@@ -243,8 +248,8 @@ booleans, and datetime types.
 
 ## Errors
 
-`loader.Load` returns `flinn.FieldErrors` (which implements `error`) when one
-or more fields fail. You can inspect individual errors if you want:
+`loader.Load` returns an `error` and may return a `flinn.FieldErrors` value when
+one or more fields fail. You can inspect individual errors if you want:
 
 ```go
 if err := loader.Load(fields); err != nil {

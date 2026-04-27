@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"log/slog"
@@ -96,7 +97,8 @@ func main() {
 		),
 	)
 	if err := loader.Load(fields); err != nil {
-		if fieldErrs, ok := err.(flinn.FieldErrors); ok {
+		var fieldErrs flinn.FieldErrors
+		if errors.As(err, &fieldErrs) {
 			for _, fe := range fieldErrs {
 				logger.Error("config field error", "path", fe.Path, "rule", fe.Rule, "msg", fe.Msg)
 			}

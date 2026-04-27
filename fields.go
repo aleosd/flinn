@@ -17,11 +17,11 @@ const (
 	kindGroup
 )
 
-// ConfigItem represents a general item loaded from a configuration file.
-// It can be either a leaf value (Field) or a collection of items (Group).
+// ConfigItem is a node in a configuration schema.
+// It is implemented by [Field] and [Group].
 type ConfigItem interface {
 	fieldName() string
-	envKey() string
+	envSegment() string
 	fieldKind() fieldKind
 	applyDefault()
 	childrenNodes() []ConfigItem
@@ -29,9 +29,9 @@ type ConfigItem interface {
 }
 
 type commonMembers struct {
-	name    string
-	envKey  string
-	fileKey string
+	name       string
+	envSegment string
+	fileKey    string
 }
 
 type leafMembers[T any] struct {
@@ -47,8 +47,8 @@ type Group struct {
 	children []ConfigItem
 }
 
-func (g *Group) envKey() string {
-	return g.comm.envKey
+func (g *Group) envSegment() string {
+	return g.comm.envSegment
 }
 
 func (g *Group) fieldName() string {
@@ -82,9 +82,7 @@ type Field[T any] struct {
 	assign func(raw string) error
 	dest   *T
 
-	envPrefix string
-	required  bool
-	oneOf     []string
+	required bool
 }
 
 // leafField is the interface walk uses to interact with any leaf,
@@ -110,8 +108,8 @@ func (f *Field[T]) runValidators(path string, errs *FieldErrors, log *slog.Logge
 	}
 }
 
-func (f *Field[T]) envKey() string {
-	return f.comm.envKey
+func (f *Field[T]) envSegment() string {
+	return f.comm.envSegment
 }
 
 func (f *Field[T]) fieldName() string {
@@ -141,11 +139,12 @@ func (f *Field[T]) applyDefault() {
 
 // Env is a Field option to set an environment variable name to load a value from.
 func (f *Field[T]) Env(key string) *Field[T] {
-	f.comm.envKey = key
+	f.comm.envSegment = key
 	return f
 }
 
-// FileKey is a name of configuration option in a file to load value from.
+// FileKey overrides the key used when looking up this field in a config source.
+// The default is the snake_case conversion of the field name.
 func (f *Field[T]) FileKey(key string) *Field[T] {
 	f.comm.fileKey = key
 	return f
@@ -201,19 +200,19 @@ func (f *NumericField[T]) Max(v T) *NumericField[T] {
 	return f
 }
 
-// Env sets an explicit environment variable name for this numeric field.
+// Env delegates to the embedded [Field.Env] and returns f for chaining.
 func (f *NumericField[T]) Env(key string) *NumericField[T] { f.Field.Env(key); return f }
 
-// FileKey sets an explicit configuration file key for this numeric field.
+// FileKey delegates to the embedded [Field.FileKey] and returns f for chaining.
 func (f *NumericField[T]) FileKey(key string) *NumericField[T] { f.Field.FileKey(key); return f }
 
-// Required marks this numeric field as required.
+// Required delegates to the embedded [Field.Required] and returns f for chaining.
 func (f *NumericField[T]) Required() *NumericField[T] { f.Field.Required(); return f }
 
-// Default sets a default value for this numeric field.
+// Default delegates to the embedded [Field.Default] and returns f for chaining.
 func (f *NumericField[T]) Default(v T) *NumericField[T] { f.Field.Default(v); return f }
 
-// AddValidator adds a custom validation function to this numeric field.
+// AddValidator delegates to the embedded [Field.AddValidator] and returns f for chaining.
 func (f *NumericField[T]) AddValidator(fn func(T) error) *NumericField[T] {
 	f.Field.AddValidator(fn)
 	return f
@@ -264,8 +263,8 @@ func Int(name string, dest *int) *NumericField[int] {
 	return &NumericField[int]{Field: makeField(name, dest, assigner)}
 }
 
-// Bool creates a configuration Field that parses a boolean value from a raw string and writes it to dest.
-// The value is converted to lower case before parsing, and strconv.ParseBool is used.
+// Bool creates a Field that parses boolean values.
+// It accepts the same formats as strconv.ParseBool (e.g., "true", "1", "false", "0").
 func Bool(name string, dest *bool) *Field[bool] {
 	assigner := func(raw string) (bool, error) {
 		b, err := strconv.ParseBool(strings.ToLower(raw))
@@ -290,7 +289,7 @@ func Float(name string, dest *float64) *NumericField[float64] {
 	return &NumericField[float64]{Field: makeField(name, dest, assigner)}
 }
 
-// UUID constructs a Field representing a configuration leaf whose value is parsed as a UUID and stored in dest.
+// UUID creates a Field that parses UUID values.
 func UUID(name string, dest *uuid.UUID) *Field[uuid.UUID] {
 	assigner := func(raw string) (uuid.UUID, error) {
 		return uuid.Parse(raw)
@@ -308,7 +307,7 @@ func FieldsGroup(name string, children ...ConfigItem) *Group {
 
 // EnvPrefix sets the environment variable prefix for all children of this group.
 func (g *Group) EnvPrefix(prefix string) *Group {
-	g.comm.envKey = prefix
+	g.comm.envSegment = prefix
 	return g
 }
 
@@ -318,8 +317,8 @@ func (g *Group) FileKey(key string) *Group {
 	return g
 }
 
-// converts a string to snake_case
-// simplified version from https://github.com/iancoleman/strcase/blob/master/snake.go
+// toSnakeCase converts a string to snake_case.
+// Simplified version of https://github.com/iancoleman/strcase/blob/master/snake.go
 func toSnakeCase(s string) string {
 	s = strings.TrimSpace(s)
 	n := strings.Builder{}
@@ -363,6 +362,8 @@ func toSnakeCase(s string) string {
 	return n.String()
 }
 
+// stringify converts a scalar value to its string representation.
+// Returns ("", false) for nil and non-scalar types (maps, slices).
 func stringify(v any) (string, bool) {
 	switch val := v.(type) {
 	case string:

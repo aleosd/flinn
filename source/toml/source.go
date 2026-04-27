@@ -1,4 +1,6 @@
 // Package toml provides a TOML configuration source for the flinn loader.
+//
+// Import as github.com/aleosd/flinn/source/toml.
 package toml
 
 import (
@@ -33,6 +35,7 @@ func newFromBytes(b []byte) (*Source, error) {
 }
 
 // NewTOMLSource reads and parses the TOML file at the given path.
+// The root of the document must be a TOML table.
 // Returns an error if the file cannot be read or is not valid TOML.
 func NewTOMLSource(path string) (*Source, error) {
 	b, err := os.ReadFile(path)

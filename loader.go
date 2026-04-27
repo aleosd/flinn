@@ -1,20 +1,23 @@
-// Package flinn provides a declarative configuration loader for Go structs.
-// It supports loading values from environment variables, file-based sources (like YAML/JSON),
-// and validating them with rules.
+// Package flinn provides a declarative, type-safe configuration loader for Go.
+// It resolves values from environment variables, JSON files, and custom sources,
+// with support for defaults, required fields, and validation.
 //
 // # Core Concepts
 //
 //   - Loader: Orchestrates loading from multiple sources.
-//   - Field: Definition for a single configuration value, created by `String()`, `Int()`, etc.
-//   - Source: An interface for providing values from a structured source (e.g., a YAML file).
+//   - Field: Definition for a single configuration value, created by [String], [Int], etc.
+//   - Source: An interface for providing values from a structured source (e.g., a JSON file).
+//   - Group: A collection of fields that share a namespace for file paths and env prefixes.
 //
-// Values are resolved in the following order of precedence:
+// Values are resolved in the following order of precedence (highest to lowest):
 //
-//  1. Environment variable (if an enabled for field or loader)
-//  2. Source (e.g., configuration file)
+//  1. Environment variable (if enabled for the field or loader)
+//  2. Config source (e.g., JSON or TOML file)
 //  3. Default value (if set)
+//  4. Required error (if the field is required and nothing resolved)
 //
-// If a required field has no value, loading fails with a FieldErrors collection.
+// If one or more fields fail to resolve or validate, loading returns a [FieldErrors]
+// collection so every problem is reported at once.
 package flinn
 
 import (
@@ -33,28 +36,30 @@ type envKeyFunc func(f ConfigItem, prefix string) string
 
 // explicitEnvKey is the default: only use a key if Env() was explicitly set.
 func explicitEnvKey(f ConfigItem, prefix string) string {
-	return joinEnvPrefix(prefix, f.envKey())
+	return joinEnvPrefix(prefix, f.envSegment())
 }
 
 // autoEnvKey falls back to the uppercased snake_case field name.
 func autoEnvKey(f ConfigItem, prefix string) string {
-	key := f.envKey()
+	key := f.envSegment()
 	if key == "" {
 		key = strings.ToUpper(f.getPathSegment())
 	}
 	return joinEnvPrefix(prefix, key)
 }
 
-// Source is the interface that wraps the Get method for retrieving configuration values.
-// Any configuration provider (JSON, YAML, etc.) must implement this interface.
+// Source is the interface for configuration backends.
+// Implementations provide values from structured sources such as JSON or TOML files.
 type Source interface {
-	// Get retrieves a configuration value from the source at the specified path.
-	// It returns the raw string value, a boolean indicating if the value was found,
-	// and an error if the retrieval failed.
+	// Get retrieves a configuration value at the given path.
+	// path is a sequence of key segments corresponding to nested positions
+	// (e.g., ["database", "host"]).
+	// Returns the raw string value, true when found, or an error on retrieval failure.
+	// When the key is absent, return ("", false, nil).
 	Get(path []string) (string, bool, error)
 }
 
-// Loader is responsible for base configuration and configuration loading.
+// Loader resolves configuration values from multiple sources.
 type Loader struct {
 	source     Source
 	envPrefix  string
@@ -84,7 +89,8 @@ func WithSource(source Source) LoaderOption {
 	}
 }
 
-// WithEnvPrefix sets a global prefix for all environment variables.
+// WithEnvPrefix sets a global prefix for auto-generated environment variable names.
+// Explicit env names set via [Field.Env] are not prefixed.
 func WithEnvPrefix(envPrefix string) LoaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
@@ -127,11 +133,12 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 			// They contribute a path segment and optionally an env prefix.
 			g, ok := f.(*Group)
 			if !ok {
-				errs.add(f.fieldName(), "type", nil,
+				path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
+				errs.add(path, "type", nil,
 					fmt.Sprintf("expected *Group for field kind %d, got %T", kindGroup, f))
 				continue
 			}
-			childEnvPrefix := joinEnvPrefix(envPrefix, g.comm.envKey)
+			childEnvPrefix := joinEnvPrefix(envPrefix, g.comm.envSegment)
 			childPathSegments := append(pathSegments, g.getPathSegment())
 			l.walk(g.childrenNodes(), childPathSegments, childEnvPrefix, errs)
 			continue
@@ -140,7 +147,8 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 		// Leaf field: resolve, coerce, validate.
 		lf, ok := f.(leafField)
 		if !ok {
-			errs.add(f.fieldName(), "type", nil,
+			path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
+			errs.add(path, "type", nil,
 				fmt.Sprintf("expected leafField for field kind %d, got %T", f.fieldKind(), f))
 			continue
 		}
@@ -176,7 +184,8 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 }
 
 // resolve tries each source in order, returning the first hit.
-// The env key used is: envPrefix + "_" + def.envKey (if both are set).
+// It first checks the environment variable keyed by envKey, then falls back
+// to the registered config source at pathSegments.
 func (l *Loader) resolve(pathSegments []string, envKey string) (string, bool, error) {
 	// Try env variable first
 	if envKey != "" {
@@ -211,5 +220,6 @@ func joinEnvPrefix(prefix, key string) string {
 	return prefix + "_" + key
 }
 
-// DefineSchema is a helper that groups multiple configuration items into a slice.
+// DefineSchema groups configuration items into a slice for [Loader.Load].
+// It is a convenience helper with no runtime effect.
 func DefineSchema(fields ...ConfigItem) []ConfigItem { return fields }

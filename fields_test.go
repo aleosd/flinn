@@ -45,18 +45,16 @@ func TestMakeField(t *testing.T) {
 	t.Run("TestWithoutOptions", func(t *testing.T) {
 		f := makeField("MyValue", &value, parser)
 		assert.Equal(t, "my_value", f.comm.fileKey)
-		assert.Equal(t, "", f.envPrefix)
-		assert.Equal(t, "", f.envKey())
+		assert.Equal(t, "", f.envSegment())
 		assert.False(t, f.required)
 		assert.False(t, f.field.hasDefault)
 		assert.Equal(t, "", f.field.defaultVal)
-		assert.Empty(t, f.oneOf)
 		assert.Empty(t, f.field.validators)
 	})
 
 	t.Run("TestWithEnvOption", func(t *testing.T) {
 		f := makeField("MyValue", &value, parser).Env("FOO_BAR")
-		assert.Equal(t, "FOO_BAR", f.comm.envKey)
+		assert.Equal(t, "FOO_BAR", f.comm.envSegment)
 	})
 
 	t.Run("TestWithRequiredOption", func(t *testing.T) {
