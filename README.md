@@ -6,7 +6,7 @@ vars, JSON, or TOML file, based on source configuration.
 
 ## Features
 
-- **Supported filed types** — `String`, `Int`, `Float`, `Bool`, `UUID`
+- **Supported field types** — `String`, `Int`, `Float`, `Bool`, `UUID`
 - **Supported sources** — env vars, JSON files, TOML files
 - **Single source of truth** - define both data loading and validation rules in
   one place

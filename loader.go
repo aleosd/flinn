@@ -29,14 +29,18 @@ import (
 
 var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// envKeyFunc is a type definition for a function that defiles how loader
+// envKeyFunc is a type definition for a function that defines how loader
 // computes environment variable key for a field, given the accumulated
 // env prefix from parent groups.
 type envKeyFunc func(f ConfigItem, prefix string) string
 
 // explicitEnvKey is the default implementation of envKeyFunc type.
 func explicitEnvKey(f ConfigItem, prefix string) string {
-	return joinEnvPrefix(prefix, f.envSegment())
+	segment := f.envSegment()
+	if segment == "" {
+		return ""
+	}
+	return joinEnvPrefix(prefix, segment)
 }
 
 // autoEnvKey is the implementation of envKeyFunc type that is used to
@@ -98,7 +102,6 @@ func WithEnvPrefix(envPrefix string) LoaderOption {
 }
 
 // WithLogger sets the logger used by the loader for debugging and warnings.
-// Only official slog.Logger instances are supported.
 func WithLogger(logger *slog.Logger) LoaderOption {
 	return func(l *Loader) {
 		l.log = logger
