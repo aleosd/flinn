@@ -1,20 +1,16 @@
 # Flinn
 
-A declarative, type-safe config loader for Go. Define your config schema as a
-tree of typed fields, and Flinn pulls values from env vars, JSON, or TOML — in
-that order. If something's wrong, you get *all* the errors at once instead of
-playing whack-a-mole one failure at a time.
+Flinn is a declarative, type-safe config loader for Go. It allows you to define
+your config schema as a tree of typed fields. Actual values are loaded from env
+vars, JSON, or TOML file, based on source configuration.
 
 ## Features
 
-- **Typed field constructors** — `String`, `Int`, `Float`, `Bool`, `UUID`
-- **Multiple sources** — env vars, JSON files, TOML files
-- **Fail-complete errors** — collects every problem into a single `FieldErrors`
-- **Nested groups** — `FieldsGroup` namespaces fields for both file paths and
-  env prefixes
-- **Auto env vars** — `WithAutoEnv()` derives env names from field names
-  (`dbHost` → `DB_HOST`)
-- **Custom sources** — one interface method and you're done
+- **Supported filed types** — `String`, `Int`, `Float`, `Bool`, `UUID`
+- **Supported sources** — env vars, JSON files, TOML files
+- **Single source of truth** - define both data loading and validation rules in
+  one place
+- **Easily extend** — one interface method and you're done
 
 ## Install
 
@@ -91,16 +87,15 @@ func main() {
 With `WithEnvPrefix("APP")`, `WithAutoEnv()`, and `EnvPrefix("DB")` on the
 database group, here's how a few fields resolve:
 
-| Field               | Env var                      | File key            | Fallback         |
-| ------------------- | ---------------------------- | ------------------- | ---------------- |
-| `Database.Host`     | `APP_DB_HOST`                | `database.host`     | `"localhost"`    |
-| `Database.Password` | `APP_DB_DB_PASSWORD`         | `database.password` | error (required) |
-| `API.Port`          | `APP_PORT`                   | `api.port`          | `8080`           |
+| Field               | Env var              | File key            | Fallback         |
+| ------------------- | -------------------- | ------------------- | ---------------- |
+| `Database.Host`     | `APP_DB_HOST`        | `database.host`     | `"localhost"`    |
+| `Database.Password` | `APP_DB_DB_PASSWORD` | `database.password` | error (required) |
+| `API.Port`          | `APP_PORT`           | `api.port`          | `8080`           |
 
-Env names are built by `joinEnvPrefix`, which concatenates the loader prefix
-(`WithEnvPrefix`), group prefixes (`EnvPrefix`), and the field key in that
-order. Explicit `Env(...)` values are prefixed too — they are not treated as
-absolute names.
+Env names are built by concatenating the loader prefix (`WithEnvPrefix`), group
+prefixes (`EnvPrefix`), and the field key in that order. Explicit `Env(...)`
+values are prefixed too — they are not treated as absolute names.
 
 ## Field types
 
@@ -112,7 +107,7 @@ flinn.String("fieldName", &dest).Required().Default("value")
 
 ### Int / Float
 
-Both return a `NumericField` so you can chain `Min` and `Max`:
+Both return a `NumericField` so you can chain `Min` and `Max` validators:
 
 ```go
 flinn.Int("fieldName", &dest).Min(1).Max(100).Default(80)
@@ -147,26 +142,24 @@ prefix only contributes when you call `EnvPrefix`.
 
 ## Field options
 
-| Method             | What it does                                                |
-| ------------------ | ----------------------------------------------------------- |
-| `Env("VAR")`       | Set the env var name explicitly                             |
-| `EnvPrefix("P")`   | Set the env prefix for a **Group**                          |
-| `FileKey("key")`   | Override the file lookup key (default: `toSnakeCase(name)`) |
-| `Default(v)`       | Use `v` if nothing else is found                            |
-| `Required()`       | Error if no value resolves and there's no default           |
-| `Min(v)`           | (Numeric only) Error if value < v                           |
-| `Max(v)`           | (Numeric only) Error if value > v                           |
-| `AddValidator(fn)` | Add your own `func(T) error` validator                      |
+| Method             | What it does                                      |
+| ------------------ | ------------------------------------------------- |
+| `Env("VAR")`       | Set the env var name explicitly                   |
+| `EnvPrefix("P")`   | Set the env prefix for a **Group**                |
+| `FileKey("key")`   | Override the file lookup key                      |
+| `Default(v)`       | Use `v` if nothing else is found                  |
+| `Required()`       | Error if no value resolves and there's no default |
+| `Min(v)`           | (Numeric only) Error if value < v                 |
+| `Max(v)`           | (Numeric only) Error if value > v                 |
+| `AddValidator(fn)` | Add your own `func(T) error` validator            |
 
 ## Where values come from
 
 For each field, Flinn checks in this order:
 
-1. **Environment variable** — from `Env()` or auto-generated by `WithAutoEnv()`
-1. **Config source** — JSON or TOML file via `Source.Get(path)`
-1. **Default** — whatever you passed to `Default()`
-1. **Required error** — if `Required()` is set and everything above came up
-   empty
+1. Environment variable
+2. Source files
+3. Provided default values
 
 ## Loader options
 
@@ -190,21 +183,12 @@ flinn.NewLoader(flinn.WithEnvPrefix("MYAPP"))
 
 ### `WithAutoEnv()`
 
-Turn on automatic env var names. If you don't call `Env()`, the env name is
-derived from the field's path.
-
-```go
-// Without EnvPrefix on the group:
-flinn.NewLoader(flinn.WithEnvPrefix("APP"), flinn.WithAutoEnv())
-// FieldsGroup("database", String("host", ...)) → env APP_HOST
-
-// With EnvPrefix on the group:
-// FieldsGroup("database", String("host", ...)).EnvPrefix("DB") → env APP_DB_HOST
-```
+Turn on automatic loading from env vars. Otherwise, only config fields with `Env()`
+will get their value from env vars.
 
 ### `WithLogger(logger)`
 
-Attach an `*slog.Logger` for debug/warn output.
+Attach an `*slog.Logger` to manage logging output. Disabled by default.
 
 ```go
 flinn.NewLoader(flinn.WithLogger(slog.Default()))
@@ -243,13 +227,10 @@ source, err := flinntoml.NewTOMLSource("config.toml")
 loader := flinn.NewLoader(flinn.WithSource(source))
 ```
 
-Root must be a TOML table. All scalar TOML types work: strings, ints, floats,
-booleans, and datetime types.
-
 ## Errors
 
-`loader.Load` returns an `error` and may return a `flinn.FieldErrors` value when
-one or more fields fail. You can inspect individual errors if you want:
+`loader.Load` returns an `error` and may return a `flinn.FieldErrors` value
+when one or more fields fail. You can inspect individual errors if you want:
 
 ```go
 if err := loader.Load(fields); err != nil {

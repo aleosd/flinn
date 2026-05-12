@@ -2,6 +2,11 @@
 
 .DEFAULT_GOAL := help
 
+# Pinned tool versions — keep in sync with .github/workflows/ci.yml.
+GOVULNCHECK_VER := v1.2.0
+GOIMPORTS_VER    := v0.31.0
+GOLANGCI_LINT_VER := v2.10
+
 # Module directories (each has its own go.mod).
 # yaml is excluded until it contains Go source files.
 MODULES := cmd/flinn . source/toml
@@ -18,10 +23,15 @@ fmt: # Format Go code (gofmt + goimports) across all modules.
 	@echo "==> Formatting code..."
 	@set -e; for m in $(MODULES); do (cd $$m && goimports -w .); done
 
+.PHONY: vet
+vet: # Run go vet across all modules.
+	@echo "==> Running go vet..."
+	@set -e; for m in $(MODULES); do (cd $$m && go vet ./...); done
+
 .PHONY: test
-test: # Run all tests with verbose output across all modules.
+test: # Run all tests with verbose output and race detection across all modules.
 	@echo "==> Running tests..."
-	@set -e; for m in $(MODULES); do (cd $$m && go test -v ./...); done
+	@set -e; for m in $(MODULES); do (cd $$m && go test -v -race ./...); done
 
 .PHONY: lint
 lint: # Run golangci-lint for comprehensive static analysis.
@@ -37,14 +47,14 @@ lint: # Run golangci-lint for comprehensive static analysis.
 vulncheck: # Check for known vulnerabilities using govulncheck.
 	@echo "==> Checking for vulnerabilities with govulncheck..."
 	@if command -v govulncheck >/dev/null 2>&1; then \
-		set -e; for m in $(MODULES); do (cd $$m && govulncheck ./...); done; \
+		set -e; for m in $(MODULES); do (cd $$m && govulncheck -show verbose ./...); done; \
 	else \
-		echo "govulncheck not found. Install it with: go install golang.org/x/vuln/cmd/govulncheck@latest"; \
+		echo "govulncheck not found. Install with: go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VER)"; \
 		exit 1; \
 	fi
 
 .PHONY: verify
-verify: fmt lint test vulncheck # Run all quality checks (fmt, lint, test, vulncheck).
+verify: fmt vet lint test vulncheck # Run all quality checks.
 	@echo "==> All quality checks passed successfully."
 
 .PHONY: build
