@@ -1,6 +1,6 @@
 // Package flinn provides a declarative, type-safe configuration loader for Go.
-// It resolves values from environment variables, JSON files, and custom sources,
-// with support for defaults, required fields, and validation.
+// It resolves values from environment variables and structured (JSON/TOML) files,
+// with support for defaults, and validation.
 //
 // # Core Concepts
 //
@@ -12,9 +12,8 @@
 // Values are resolved in the following order of precedence (highest to lowest):
 //
 //  1. Environment variable (if enabled for the field or loader)
-//  2. Config source (e.g., JSON or TOML file)
+//  2. Source file
 //  3. Default value (if set)
-//  4. Required error (if the field is required and nothing resolved)
 //
 // If one or more fields fail to resolve or validate, loading returns a [FieldErrors]
 // collection so every problem is reported at once.
@@ -30,16 +29,23 @@ import (
 
 var discardLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
-// envKeyFunc derives the effective environment variable key for a field.
-// prefix is the accumulated env prefix at the current walk depth.
+// envKeyFunc is a type definition for a function that defines how loader
+// computes environment variable key for a field, given the accumulated
+// env prefix from parent groups.
 type envKeyFunc func(f ConfigItem, prefix string) string
 
-// explicitEnvKey is the default: only use a key if Env() was explicitly set.
+// explicitEnvKey is the default implementation of envKeyFunc type.
 func explicitEnvKey(f ConfigItem, prefix string) string {
-	return joinEnvPrefix(prefix, f.envSegment())
+	segment := f.envSegment()
+	if segment == "" {
+		return ""
+	}
+	return joinEnvPrefix(prefix, segment)
 }
 
-// autoEnvKey falls back to the uppercased snake_case field name.
+// autoEnvKey is the implementation of envKeyFunc type that is used to
+// automatically generate environment variable names based on field names
+// when explicit env names are not set and env autoload is enabled.
 func autoEnvKey(f ConfigItem, prefix string) string {
 	key := f.envSegment()
 	if key == "" {
@@ -59,7 +65,7 @@ type Source interface {
 	Get(path []string) (string, bool, error)
 }
 
-// Loader resolves configuration values from multiple sources.
+// Loader loads configuration values from sources based on options.
 type Loader struct {
 	source     Source
 	envPrefix  string
@@ -71,9 +77,7 @@ type Loader struct {
 // Each field is resolved sequentially, with environment variables taking precedence
 // over other sources. It returns a FieldErrors collection if any errors occur.
 func (l *Loader) Load(fields []ConfigItem) error {
-	var errs FieldErrors
-	l.walk(fields, []string{}, l.envPrefix, &errs)
-	if len(errs) > 0 {
+	if errs := l.walk(fields, []string{}, l.envPrefix); len(errs) > 0 {
 		return errs
 	}
 	return nil
@@ -107,6 +111,8 @@ func WithLogger(logger *slog.Logger) LoaderOption {
 // WithAutoEnv enables automatic resolution of environment variables based on field names.
 // If Env() is not explicitly called on a field, the environment variable name
 // will be derived from the field's path (e.g., "DATABASE_PORT").
+// Without this option, only fields that have explicit Env() option will be
+// loaded from environment variables.
 func WithAutoEnv() LoaderOption {
 	return func(l *Loader) {
 		l.envKeyFunc = autoEnvKey
@@ -125,7 +131,8 @@ func NewLoader(opts ...LoaderOption) *Loader {
 	return l
 }
 
-func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix string, errs *FieldErrors) {
+func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix string) FieldErrors {
+	var errs FieldErrors
 	for _, f := range fields {
 		l.log.Debug("walking field", "field", f.fieldName(), "kind", f.fieldKind())
 		if f.fieldKind() == kindGroup {
@@ -135,12 +142,12 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 			if !ok {
 				path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
 				errs.add(path, "type", nil,
-					fmt.Sprintf("expected *Group for field kind %d, got %T", kindGroup, f))
+					fmt.Sprintf("expected *Group for field kind %s, got %T", kindGroup.String(), f))
 				continue
 			}
 			childEnvPrefix := joinEnvPrefix(envPrefix, g.comm.envSegment)
 			childPathSegments := append(pathSegments, g.getPathSegment())
-			l.walk(g.childrenNodes(), childPathSegments, childEnvPrefix, errs)
+			errs = append(errs, l.walk(g.childrenNodes(), childPathSegments, childEnvPrefix)...)
 			continue
 		}
 
@@ -149,7 +156,7 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 		if !ok {
 			path := strings.Join(append(pathSegments, f.getPathSegment()), ".")
 			errs.add(path, "type", nil,
-				fmt.Sprintf("expected leafField for field kind %d, got %T", f.fieldKind(), f))
+				fmt.Sprintf("expected leafField for field kind %s, got %T", f.fieldKind().String(), f))
 			continue
 		}
 		envKey := l.envKeyFunc(lf, envPrefix)
@@ -179,8 +186,9 @@ func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix stri
 		}
 
 		// Run validation rules against the now-typed value.
-		lf.runValidators(logicalPath, errs, l.log)
+		errs = append(errs, lf.runValidators(logicalPath, l.log)...)
 	}
+	return errs
 }
 
 // resolve tries each source in order, returning the first hit.

@@ -12,13 +12,24 @@ import (
 
 type fieldKind int
 
+func (f fieldKind) String() string {
+	switch f {
+	case kindLeaf:
+		return "leaf"
+	case kindGroup:
+		return "group"
+	default:
+		return "unknown"
+	}
+}
+
 const (
 	kindLeaf fieldKind = iota
 	kindGroup
 )
 
-// ConfigItem is a node in a configuration schema.
-// It is implemented by [Field] and [Group].
+// ConfigItem is a general node in a configuration schema.
+// It is implemented by both [Field] and [Group].
 type ConfigItem interface {
 	fieldName() string
 	envSegment() string
@@ -92,20 +103,22 @@ type leafField interface {
 	isRequired() bool
 	hasDefaultVal() bool
 	assignRaw(raw string) error
-	runValidators(path string, errs *FieldErrors, log *slog.Logger)
+	runValidators(path string, log *slog.Logger) FieldErrors
 }
 
 func (f *Field[T]) isRequired() bool           { return f.required }
 func (f *Field[T]) hasDefaultVal() bool        { return f.field.hasDefault }
 func (f *Field[T]) assignRaw(raw string) error { return f.assign(raw) }
 
-func (f *Field[T]) runValidators(path string, errs *FieldErrors, log *slog.Logger) {
+func (f *Field[T]) runValidators(path string, log *slog.Logger) FieldErrors {
+	var errs FieldErrors
 	for _, v := range f.field.validators {
 		if err := v(*f.dest); err != nil {
 			errs.add(path, "validate", *f.dest, err.Error())
 			log.Warn("validation failed", "path", path, "error", err.Error())
 		}
 	}
+	return errs
 }
 
 func (f *Field[T]) envSegment() string {

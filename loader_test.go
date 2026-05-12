@@ -157,6 +157,29 @@ func TestLoader_LoadsFromEnv(t *testing.T) {
 	})
 }
 
+func TestLoader_EnvPrefixAloneDoesNotResolve(t *testing.T) {
+	t.Run("with prefix but no Env() on fields does not read env vars", func(t *testing.T) {
+		// Without .Env() calls, WithEnvPrefix alone must NOT cause fields
+		// to resolve from env vars. Previously, explicitEnvKey would fall back
+		// to the bare prefix (e.g. "APP"), causing all unprefixed fields to
+		// read the same env var.
+		var cfg TestConfig
+		t.Setenv("APP", "should-not-be-read")
+		t.Setenv("APP_HOST", "env-host")
+		fields := []ConfigItem{
+			String("host", &cfg.Database.Host).Default("default-host"),
+			Int("port", &cfg.Database.Port).Default(3306),
+		}
+		loader := NewLoader(WithEnvPrefix("APP"))
+
+		err := loader.Load(fields)
+
+		require.NoError(t, err)
+		assert.Equal(t, "default-host", cfg.Database.Host)
+		assert.Equal(t, 3306, cfg.Database.Port)
+	})
+}
+
 func TestLoader_LoadsFromSource(t *testing.T) {
 	var sourceData = map[string]any{
 		"database": map[string]any{
