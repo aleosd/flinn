@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -87,7 +88,7 @@ type parser[T any] func(raw string) (T, error)
 // Field represents a single configuration leaf node that parses values into type T.
 // It holds configuration for environment variable keys, file keys, default values,
 // and validation rules.
-type Field[T any] struct {
+type Field[T comparable] struct {
 	comm   *commonMembers
 	field  *leafMembers[T]
 	assign func(raw string) error
@@ -185,6 +186,22 @@ func (f *Field[T]) AddValidator(fn func(T) error) *Field[T] {
 	return f
 }
 
+// OneOf adds a validator that ensures the field value is one of the provided values.
+func (f *Field[T]) OneOf(v ...T) *Field[T] {
+	allowed := append([]T(nil), v...)
+	if len(allowed) == 0 {
+		return f.AddValidator(func(T) error {
+			return fmt.Errorf("OneOf requires at least one allowed value")
+		})
+	}
+	return f.AddValidator(func(val T) error {
+		if slices.Contains(allowed, val) {
+			return nil
+		}
+		return fmt.Errorf("must be one of %v", allowed)
+	})
+}
+
 // NumericField is a specialized Field for ordered types (integers, floats)
 // that supports additional range-based validators like Min and Max.
 type NumericField[T cmp.Ordered] struct {
@@ -232,7 +249,7 @@ func (f *NumericField[T]) AddValidator(fn func(T) error) *NumericField[T] {
 }
 
 // makeField is the shared constructor logic for any leaf type.
-func makeField[T any](name string, dest *T, parse parser[T]) *Field[T] {
+func makeField[T comparable](name string, dest *T, parse parser[T]) *Field[T] {
 	comm := &commonMembers{name: name}
 	field := &leafMembers[T]{}
 	f := Field[T]{

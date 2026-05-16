@@ -199,3 +199,30 @@ func TestFloatField(t *testing.T) {
 		}
 	})
 }
+
+func TestField_OneOf(t *testing.T) {
+	t.Run("valid value", func(t *testing.T) {
+		var dest string
+		f := makeField("test", &dest, func(raw string) (string, error) { return raw, nil })
+		f.OneOf("a", "b", "c")
+		err := f.field.validators[0]("b")
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		var dest string
+		f := makeField("test", &dest, func(raw string) (string, error) { return raw, nil })
+		f.OneOf("a", "b")
+		err := f.field.validators[0]("c")
+		assert.Error(t, err)
+	})
+
+	t.Run("empty list", func(t *testing.T) {
+		var dest string
+		f := makeField("test", &dest, func(raw string) (string, error) { return raw, nil })
+		f.OneOf()
+		if err := f.field.validators[0]("anything"); err == nil {
+			t.Fatal("expected error for empty list")
+		}
+	})
+}
