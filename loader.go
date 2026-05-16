@@ -65,7 +65,7 @@ type Source interface {
 	Get(path []string) (string, bool, error)
 }
 
-// Loader loads configuration values from sources based on options.
+// Loader is the main object to configure and load configuration values.
 type Loader struct {
 	source     Source
 	envPrefix  string
@@ -86,15 +86,17 @@ func (l *Loader) Load(fields []ConfigItem) error {
 // LoaderOption is a function type used to configure a Loader.
 type LoaderOption func(*Loader)
 
-// WithSource sets the configuration source (e.g., JSONSource) for the loader.
+// WithSource is a loader option that sets the configuration source
+// (e.g., JSONSource) for the loader.
 func WithSource(source Source) LoaderOption {
 	return func(l *Loader) {
 		l.source = source
 	}
 }
 
-// WithEnvPrefix sets a global prefix for auto-generated environment variable names.
-// Explicit env names set via [Field.Env] are not prefixed.
+// WithEnvPrefix sets a global prefix applied to all environment variable names,
+// both auto-generated keys and explicit names set via [Field.Env].
+// The prefix is joined with [joinEnvPrefix].
 func WithEnvPrefix(envPrefix string) LoaderOption {
 	return func(l *Loader) {
 		l.envPrefix = envPrefix
@@ -131,6 +133,8 @@ func NewLoader(opts ...LoaderOption) *Loader {
 	return l
 }
 
+// walk iterates over a collection of fields, loads their values,
+// performs validation, and accumulates errors.
 func (l *Loader) walk(fields []ConfigItem, pathSegments []string, envPrefix string) FieldErrors {
 	var errs FieldErrors
 	for _, f := range fields {
@@ -228,6 +232,6 @@ func joinEnvPrefix(prefix, key string) string {
 	return prefix + "_" + key
 }
 
-// DefineSchema groups configuration items into a slice for [Loader.Load].
-// It is a convenience helper with no runtime effect.
+// DefineSchema groups configuration items into a slice.
+// It is a syntactic sugar to create a slice of [ConfigItem] for [Loader.Load].
 func DefineSchema(fields ...ConfigItem) []ConfigItem { return fields }
