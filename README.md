@@ -1,5 +1,7 @@
 # Flinn
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/aleosd/flinn)](https://goreportcard.com/report/github.com/aleosd/flinn)
+
 Flinn is a declarative, type-safe config loader for Go. It allows you to define
 your config schema as a tree of typed fields. Actual values are loaded from env
 vars, JSON, or TOML file, based on source configuration.
