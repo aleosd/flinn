@@ -7,8 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type fieldKind int
@@ -76,6 +75,7 @@ func (g *Group) applyDefault() {}
 func (g *Group) childrenNodes() []ConfigItem {
 	return g.children
 }
+
 func (g *Group) getPathSegment() string {
 	if g.comm.fileKey != "" {
 		return g.comm.fileKey
@@ -331,7 +331,7 @@ func UUID(name string, dest *uuid.UUID) *Field[uuid.UUID] {
 // It is used to represent nested configuration structures.
 func FieldsGroup(name string, children ...ConfigItem) *Group {
 	comm := &commonMembers{name: name}
-	var f = Group{comm: comm, children: children}
+	f := Group{comm: comm, children: children}
 	return &f
 }
 
