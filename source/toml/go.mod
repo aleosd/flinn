@@ -1,6 +1,6 @@
 module github.com/aleosd/flinn/source/toml
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/pelletier/go-toml/v2 v2.3.0

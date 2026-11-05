@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +35,7 @@ func TestToSnakeCase(t *testing.T) {
 
 func TestMakeField(t *testing.T) {
 	var value string
-	var parser = func(raw string) (string, error) {
+	parser := func(raw string) (string, error) {
 		return raw, nil
 	}
 	t.Run("TestFileKeyWithOption", func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNumericFieldRequired(t *testing.T) {
 func TestUUIDField(t *testing.T) {
 	t.Run("TestSuccess", func(t *testing.T) {
 		var value uuid.UUID
-		var UUIDValue = uuid.New()
+		UUIDValue := uuid.New()
 		f := UUID("MyValue", &value)
 		err := f.assign(UUIDValue.String())
 
