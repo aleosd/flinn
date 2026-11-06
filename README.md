@@ -1,10 +1,11 @@
 # Flinn
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/aleosd/flinn)](https://goreportcard.com/report/github.com/aleosd/flinn)
-
 Flinn is a declarative, type-safe config loader for Go. It allows you to define
 your config schema as a tree of typed fields. Actual values are loaded from env
 vars, JSON, or TOML file, based on source configuration.
+
+Current version requires go `v1.27.0` or higher to support native `uuid`.
+Previous versions used google package.
 
 ## Features
 
@@ -185,8 +186,8 @@ flinn.NewLoader(flinn.WithEnvPrefix("MYAPP"))
 
 ### `WithAutoEnv()`
 
-Turn on automatic loading from env vars. Otherwise, only config fields with `Env()`
-will get their value from env vars.
+Turn on automatic loading from env vars. Otherwise, only config fields with
+`Env()` will get their value from env vars.
 
 ### `WithLogger(logger)`
 
